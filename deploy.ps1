@@ -81,12 +81,23 @@ git commit -m $message
 # 7. Pastikan branch adalah main
 git branch -M $BRANCH
 
-# 8. Pull terbaru dari GitHub untuk menghindari konflik
-Write-Host "`n📥 Menarik perubahan terbaru dari GitHub..." -ForegroundColor Blue
-if (-not (git pull --rebase origin $BRANCH)) {
-    Write-Host "❌ GAGAL PULL. Ada konflik dengan perubahan di GitHub." -ForegroundColor Red
-    Write-Host "💡 Tips: Selesaikan konflik manual atau stash perubahan lokal Anda." -ForegroundColor Yellow
-    exit 1
+# 8. Pull terbaru dari GitHub untuk menghindari konflik (skip jika first push)
+Write-Host "`n📥 Mengecek repository GitHub..." -ForegroundColor Blue
+
+# Cek apakah remote branch sudah ada
+$remoteBranchExists = git ls-remote --heads origin $BRANCH 2>$null
+if ($remoteBranchExists -match $BRANCH) {
+    Write-Host "  Repository GitHub sudah ada, menarik perubahan terbaru..." -ForegroundColor Yellow
+    if (git pull --rebase origin $BRANCH) {
+        Write-Host "  ✓ Pull berhasil" -ForegroundColor Green
+    } else {
+        Write-Host "❌ GAGAL PULL. Ada konflik dengan perubahan di GitHub." -ForegroundColor Red
+        Write-Host "💡 Tips: Selesaikan konflik manual atau stash perubahan lokal Anda." -ForegroundColor Yellow
+        exit 1
+    }
+} else {
+    Write-Host "  ⚠️  Ini adalah push pertama ke GitHub (branch '$BRANCH' belum ada)" -ForegroundColor Yellow
+    Write-Host "  → Skip pull, langsung push..." -ForegroundColor Yellow
 }
 
 # 9. Push ke GitHub
