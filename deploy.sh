@@ -72,8 +72,9 @@ git add .
 echo -e "\n${BLUE}🔍 Mengecek perubahan...${NC}"
 CHANGED_FILES=$(git diff --cached --name-only)
 NEW_FILES=$(git ls-files --others --exclude-standard)
+DELETED_FILES=$(git diff --cached --name-only --diff-filter=D)
 
-if [ -z "$CHANGED_FILES" ] && [ -z "$NEW_FILES" ]; then
+if [ -z "$CHANGED_FILES" ] && [ -z "$NEW_FILES" ] && [ -z "$DELETED_FILES" ]; then
     echo -e "${GREEN}✅ Tidak ada perubahan baru. Semua file sudah up-to-date di GitHub!${NC}"
     exit 0
 fi
@@ -82,11 +83,17 @@ fi
 echo -e "${GREEN}📊 File yang akan di-upload:${NC}"
 if [ -n "$CHANGED_FILES" ]; then
     echo -e "${YELLOW}  ✏️  File yang dimodifikasi:${NC}"
-    echo "$CHANGED_FILES" | sed 's/^/      /'
+    echo "$CHANGED_FILES" | grep -v '^$' | sed 's/^/      /'
 fi
 if [ -n "$NEW_FILES" ]; then
     echo -e "${YELLOW}  🆕 File baru:${NC}"
     echo "$NEW_FILES" | sed 's/^/      /'
+fi
+if [ -n "$DELETED_FILES" ]; then
+    echo -e "${RED}  🗑️  File yang akan dihapus dari GitHub:${NC}"
+    echo "$DELETED_FILES" | sed 's/^/      /'
+    echo ""
+    echo -e "${YELLOW}  ⚠️  Perhatian: File-file di atas akan dihapus dari repository GitHub!${NC}"
 fi
 echo ""
 

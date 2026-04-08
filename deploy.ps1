@@ -54,8 +54,9 @@ git add .
 Write-Host "`n🔍 Mengecek perubahan..." -ForegroundColor Blue
 $changedFiles = git diff --cached --name-only
 $newFiles = git ls-files --others --exclude-standard
+$deletedFiles = git diff --cached --name-only --diff-filter=D
 
-if (-not $changedFiles -and -not $newFiles) {
+if (-not $changedFiles -and -not $newFiles -and -not $deletedFiles) {
     Write-Host "✅ Tidak ada perubahan baru. Semua file sudah up-to-date di GitHub!" -ForegroundColor Green
     exit 0
 }
@@ -69,6 +70,12 @@ if ($changedFiles) {
 if ($newFiles) {
     Write-Host "  🆕 File baru:" -ForegroundColor Yellow
     $newFiles | ForEach-Object { Write-Host "      $_" }
+}
+if ($deletedFiles) {
+    Write-Host "  🗑️  File yang akan dihapus dari GitHub:" -ForegroundColor Red
+    $deletedFiles | ForEach-Object { Write-Host "      $_" }
+    Write-Host ""
+    Write-Host "  ⚠️  Perhatian: File-file di atas akan dihapus dari repository GitHub!" -ForegroundColor Yellow
 }
 Write-Host ""
 
