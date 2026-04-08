@@ -1,0 +1,52 @@
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.qwen/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Development files
+tests/
+phpunit.xml.dist
+preload.php
+server.php
+spark
+
+# Debug files
+debug*.php
+update-pass.php
+error.jpeg
+gambar.png
+*.md
+*.pdf
+
+# Composer
+vendor/
+
+# Writable folder contents
+writable/logs/*
+!writable/logs/.htaccess
+writable/session/*
+!writable/session/.htaccess
+writable/cache/*
+!writable/cache/.htaccess
+writable/debugbar/*
+!writable/debugbar/.htaccess
+writable/uploads/*
+!writable/uploads/.htaccess
+
+# Backup files
+*.bak
+*.backup
+*.sql.gz
+*.sql.bz2
