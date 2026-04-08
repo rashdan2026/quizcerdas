@@ -15,20 +15,33 @@
 Thumbs.db
 desktop.ini
 
-# Development files
+# Development and Test files
 tests/
 phpunit.xml.dist
 preload.php
 server.php
 spark
-
-# Debug files
+test_*.php
+*_test.php
+*_tester.php
 debug*.php
 update-pass.php
+
+# Temporary and Debug scripts
+update_*.php
+cleanup_*.php
+verify_*.php
+remove_*.php
+
+# Media files (non-essential)
+error.jpg
 error.jpeg
 gambar.png
-*.md
-*.pdf
+
+# Third-party library docs
+system/ThirdParty/*/LICENSE*.md
+system/ThirdParty/*/README*.md
+system/ThirdParty/*/CHANGELOG*.md
 
 # Composer
 vendor/
