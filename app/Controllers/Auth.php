@@ -56,10 +56,16 @@ class Auth extends BaseController
                     : hash_equals($storedPassword, $password);
             }
 
-            if (! $student || ! $validPassword) {
+            if (! $student) {
                 $this->generateCaptcha();
 
-                return redirect()->back()->withInput()->with('error', 'Kredensial mahasiswa tidak valid.');
+                return redirect()->back()->withInput()->with('error', 'Data Mahasiswa tidak ditemukan!');
+            }
+
+            if (! $validPassword) {
+                $this->generateCaptcha();
+
+                return redirect()->back()->withInput()->with('error', 'Password salah!');
             }
 
             if (empty($student['last_login'])) {
