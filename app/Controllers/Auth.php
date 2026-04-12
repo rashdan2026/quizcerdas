@@ -230,6 +230,179 @@ class Auth extends BaseController
         return redirect()->to('/auth')->with('success', 'Password berhasil diperbarui. Silakan login ulang.');
     }
 
+    public function forgotPassword()
+    {
+        if (session('logged_in')) {
+            return session('role') === 'lecturer'
+                ? redirect()->to('/lecturer/subjects')
+                : redirect()->to('/student/dashboard');
+        }
+
+        // Only generate captcha on GET request
+        if ($this->request->getMethod() !== 'POST') {
+            $captcha = $this->generateCaptcha();
+            return view('auth/forgot_password', ['captcha' => $captcha]);
+        }
+
+        // POST request - validate without regenerating captcha first
+        $email   = trim((string) $this->request->getPost('email'));
+        $captcha = strtoupper(trim((string) $this->request->getPost('captcha')));
+        $session = session();
+
+        // Validate captcha FIRST
+        if ($captcha !== $session->get('captcha_code')) {
+            $this->generateCaptcha(); // Generate new captcha after failed attempt
+            return redirect()->back()->withInput()->with('error', 'Captcha tidak sesuai.');
+        }
+
+        // Check if email exists in students or lecturers table
+        $studentModel = new StudentModel();
+        $student = $studentModel->find($email);
+
+        $lecturerModel = new LecturerModel();
+        $lecturer = $lecturerModel->where('email', $email)->first();
+
+        if (!$student && !$lecturer) {
+            $this->generateCaptcha();
+            return redirect()->back()->withInput()->with('error', 'Email tidak ditemukan.');
+        }
+
+        // Generate random password
+        $newPassword = substr(str_shuffle('ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#$'), 0, 10);
+        $hashedPassword = password_hash($newPassword, PASSWORD_BCRYPT);
+
+        // Update password in database
+        if ($student) {
+            $studentModel->update($email, ['password' => $hashedPassword]);
+            $name = $student['nama'];
+        } else {
+            $lecturerModel->update($lecturer['id'], ['password' => $hashedPassword]);
+            $name = $lecturer['nama'];
+        }
+
+        // Send email with new password
+        $mailResult = $this->sendPasswordResetEmail($email, $name, $newPassword);
+
+        if (!$mailResult['ok']) {
+            $this->generateCaptcha();
+            return redirect()->back()->withInput()->with('error', 'Gagal mengirim email: ' . $mailResult['message']);
+        }
+
+        $this->generateCaptcha();
+        return redirect()->to('/auth')->with('success', 'Password baru telah dikirim ke email Anda. Silakan cek inbox.');
+    }
+
+    private function sendPasswordResetEmail(string $to, string $name, string $newPassword): array
+    {
+        $subject = 'Reset Password - Sistem Absensi Kampus';
+        $body = "Halo {$name},\n\n"
+              . "Password Anda telah direset.\n\n"
+              . "Password baru: {$newPassword}\n\n"
+              . "Silakan login dengan password baru tersebut.\n"
+              . "Kami sarankan untuk segera mengubah password setelah login.\n\n"
+              . "Jika Anda tidak meminta reset password ini, silakan hubungi administrator.";
+
+        if (! function_exists('curl_init')) {
+            return ['ok' => false, 'message' => 'Ekstensi cURL tidak tersedia di server.'];
+        }
+
+        // Try Gmail (webriau.com) first
+        $gmailResult = $this->sendViaGmailCustom($to, $subject, $body);
+
+        if ($gmailResult['ok']) {
+            return $gmailResult;
+        }
+
+        // If Gmail fails, fallback to Turbo-SMTP
+        return $this->sendViaTurboSmtpCustom($to, $subject, $body);
+    }
+
+    private function sendViaGmailCustom(string $to, string $subject, string $body): array
+    {
+        $serverAUrl = (string) env('otp.mailApiUrl', 'https://gmail.webriau.com/servera.php');
+        $apiKey     = (string) env('otp.mailApiKey', 'b5d4c11bd3854a159b1ac9b417eec952d726eb0e037099f46925e3ea381b0128');
+
+        $payload = [
+            'to'      => $to,
+            'subject' => $subject,
+            'body'    => $body,
+        ];
+
+        $ch = curl_init($serverAUrl);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($payload));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/x-www-form-urlencoded',
+            'X-API-Key: ' . $apiKey,
+        ]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+
+        $response  = curl_exec($ch);
+        $httpCode  = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
+        curl_close($ch);
+
+        if ($curlError !== '') {
+            return ['ok' => false, 'message' => 'Kesalahan jaringan: ' . $curlError];
+        }
+
+        if ($httpCode < 200 || $httpCode >= 300) {
+            $responseData = json_decode((string) $response, true);
+            $errorText    = is_array($responseData) && isset($responseData['message'])
+                ? (string) $responseData['message']
+                : 'HTTP ' . $httpCode;
+
+            return ['ok' => false, 'message' => 'Server email menolak permintaan (' . $errorText . ').'];
+        }
+
+        return ['ok' => true, 'message' => 'OK'];
+    }
+
+    private function sendViaTurboSmtpCustom(string $to, string $subject, string $body): array
+    {
+        $url = 'https://api.turbo-smtp.com/api/v2/mail/send';
+        $consumerKey = (string) env('turboSmtp.consumerKey', 'eda1805b1b910db73358');
+        $consumerSecret = (string) env('turboSmtp.consumerSecret', 'h31XlvNIOA7txmCUnPGr');
+
+        $data = [
+            'from' => 'noreply@kursuscerdas.com',
+            'to' => $to,
+            'subject' => $subject,
+            'content' => $body,
+            'html_content' => nl2br($body),
+        ];
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'consumerKey: ' . $consumerKey,
+            'consumerSecret: ' . $consumerSecret,
+        ]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+
+        $response = curl_exec($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
+        curl_close($ch);
+
+        if ($curlError !== '') {
+            return ['ok' => false, 'message' => 'Turbo-SMTP error: ' . $curlError];
+        }
+
+        if ($httpCode < 200 || $httpCode >= 300) {
+            return ['ok' => false, 'message' => 'Turbo-SMTP gagal mengirim email (HTTP ' . $httpCode . ')'];
+        }
+
+        return ['ok' => true, 'message' => 'OK (via Turbo-SMTP)'];
+    }
+
     public function logout()
     {
         session()->destroy();

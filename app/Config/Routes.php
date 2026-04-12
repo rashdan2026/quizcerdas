@@ -11,6 +11,7 @@ $routes->match(['get', 'post'], 'auth', 'Auth::index');
 $routes->post('auth/login', 'Auth::login');
 $routes->match(['get', 'post'], 'auth/otp', 'Auth::otp');
 $routes->match(['get', 'post'], 'auth/change-password', 'Auth::changePassword');
+$routes->match(['get', 'post'], 'auth/forgot-password', 'Auth::forgotPassword');
 $routes->get('logout', 'Auth::logout');
 
 $routes->group('lecturer', ['filter' => 'authguard:lecturer'], static function ($routes) {

@@ -45,6 +45,11 @@
                     <button type="submit" class="btn btn-primary w-100 py-2 fw-600">
                         <i class="bi bi-box-arrow-in-right me-1"></i>Masuk
                     </button>
+                    <div class="text-center mt-3">
+                        <a href="<?= base_url('/auth/forgot-password') ?>" class="text-decoration-none small" style="color:#4F46E5;">
+                            <i class="bi bi-key me-1"></i>Lupa Password?
+                        </a>
+                    </div>
                 </form>
             </div>
         </div>
