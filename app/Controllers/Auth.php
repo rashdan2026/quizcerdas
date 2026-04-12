@@ -41,12 +41,7 @@ class Auth extends BaseController
 
         if ($role === 'student') {
             $studentModel = new StudentModel();
-            $student      = $studentModel
-                ->groupStart()
-                ->where('email', $identifier)
-                ->orWhere('npm', $identifier)
-                ->groupEnd()
-                ->first();
+            $student      = $studentModel->where('email', $identifier)->first();
 
             $validPassword = false;
             if ($student) {

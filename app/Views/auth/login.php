@@ -22,8 +22,8 @@
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label"><i class="bi bi-person-badge me-1"></i>Email / NPM</label>
-                        <input type="text" name="identifier" class="form-control" value="<?= esc(old('identifier')) ?>" placeholder="Masukkan Email atau NPM" required>
+                        <label class="form-label"><i class="bi bi-person-badge me-1"></i>Email</label>
+                        <input type="email" name="identifier" class="form-control" value="<?= esc(old('identifier')) ?>" placeholder="Masukkan Email" required>
                     </div>
                     <div class="mb-3">
                         <label class="form-label"><i class="bi bi-lock me-1"></i>Password</label>
