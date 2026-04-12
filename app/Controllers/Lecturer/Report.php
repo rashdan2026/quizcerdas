@@ -14,27 +14,91 @@ class Report extends BaseController
      */
     public function index()
     {
-        $db         = db_connect();
-        $dosenId    = session('user_id');
+        try {
+            $db         = db_connect();
+            $dosenId    = session('user_id');
+            
+            if (!$dosenId) {
+                return redirect()->to('/auth')->with('error', 'Silakan login terlebih dahulu.');
+            }
+            
+            $selectedKelas = $this->request->getGet('kelas');
 
-        // Daftar pertemuan + jumlah yang sudah absen
-        $meetings = $db->table('meetings m')
-            ->select('m.id, m.pertemuan_ke, m.judul, m.expired_at, s.kode_mk, s.nama_mk, COUNT(a.id) as total_absen')
-            ->join('subjects s', 's.id = m.subject_id')
-            ->join('attendance a', 'a.meeting_id = m.id', 'left')
-            ->where('s.dosen_id', $dosenId)
-            ->groupBy('m.id')
-            ->orderBy('m.id', 'DESC')
-            ->get()
-            ->getResultArray();
+            // Check if students table exists
+            $studentsTableExists = $db->query(
+                "SELECT COUNT(*) as cnt FROM information_schema.tables 
+                 WHERE table_schema = ? AND table_name = 'students'",
+                [$db->getDatabase()]
+            )->getRowArray()['cnt'] > 0;
 
-        // Daftar mahasiswa aktif (untuk form tambah manual)
-        $students = (new StudentModel())->orderBy('email', 'ASC')->findAll();
+            // Daftar pertemuan + jumlah yang sudah absen
+            if ($selectedKelas && $studentsTableExists) {
+                // Get meetings with attendance count for specific class
+                $sql = "SELECT m.id, m.pertemuan_ke, m.judul, m.expired_at, s.kode_mk, s.nama_mk,
+                        (SELECT COUNT(*) FROM attendance a 
+                         JOIN students st ON st.email = a.email 
+                         WHERE a.meeting_id = m.id AND st.kelas = ?) as total_absen
+                        FROM meetings m
+                        JOIN subjects s ON s.id = m.subject_id
+                        WHERE s.dosen_id = ?
+                        ORDER BY m.id DESC";
+                $meetings = $db->query($sql, [$selectedKelas, $dosenId])->getResultArray();
+            } else {
+                $meetings = $db->table('meetings m')
+                    ->select('m.id, m.pertemuan_ke, m.judul, m.expired_at, s.kode_mk, s.nama_mk, COUNT(a.id) as total_absen')
+                    ->join('subjects s', 's.id = m.subject_id')
+                    ->join('attendance a', 'a.meeting_id = m.id', 'left')
+                    ->where('s.dosen_id', $dosenId)
+                    ->groupBy('m.id')
+                    ->orderBy('m.id', 'DESC')
+                    ->get()
+                    ->getResultArray();
+            }
 
-        return view('lecturer/report', [
-            'meetings' => $meetings,
-            'students' => $students,
-        ]);
+            // Get list of all classes for filter dropdown
+            $kelasList = [];
+            if ($studentsTableExists) {
+                try {
+                    $kelasListRaw = $db->table('students')
+                        ->select('DISTINCT kelas')
+                        ->where('kelas IS NOT NULL', null, false)
+                        ->where('kelas !=', '')
+                        ->orderBy('kelas', 'ASC')
+                        ->get()
+                        ->getResultArray();
+                    $kelasList = array_filter(array_column($kelasListRaw, 'kelas'), function($k) {
+                        return !empty($k);
+                    });
+                    $kelasList = array_values($kelasList);
+                } catch (\Exception $e) {
+                    // kelas column might not exist
+                    $kelasList = [];
+                }
+            }
+
+            // Daftar mahasiswa aktif (untuk form tambah manual)
+            $students = [];
+            if ($studentsTableExists) {
+                try {
+                    $students = (new StudentModel())->orderBy('email', 'ASC')->findAll();
+                } catch (\Exception $e) {
+                    $students = [];
+                }
+            }
+
+            return view('lecturer/report', [
+                'meetings' => $meetings ?? [],
+                'students' => $students ?? [],
+                'kelasList' => $kelasList ?? [],
+                'selectedKelas' => $selectedKelas,
+            ]);
+        } catch (\Exception $e) {
+            log_message('error', 'Report index error: ' . $e->getMessage());
+            log_message('error', 'Trace: ' . $e->getTraceAsString());
+            
+            // Return with error flash message
+            return redirect()->back()->with('error', 'Error loading report: ' . $e->getMessage());
+        }
     }
 
     /**

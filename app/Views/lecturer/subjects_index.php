@@ -42,13 +42,18 @@
                         <?php endif; ?>
                     </td>
                     <td class="text-center">
-                        <form action="<?= base_url('/lecturer/subjects/' . $subject['id'] . '/toggle') ?>" method="post" class="d-inline">
-                            <?= csrf_field() ?>
-                            <button class="btn btn-sm <?= $subject['is_active'] ? 'btn-outline-warning' : 'btn-outline-success' ?>" type="submit">
-                                <i class="bi <?= $subject['is_active'] ? 'bi-toggle-on' : 'bi-toggle-off' ?> me-1"></i>
-                                <?= $subject['is_active'] ? 'Nonaktifkan' : 'Aktifkan' ?>
+                        <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-info text-white" onclick="exportSubject(<?= $subject['id'] ?>, '<?= esc($subject['kode_mk'], 'js') ?>', '<?= esc($subject['nama_mk'], 'js') ?>')" title="Export XLS">
+                                <i class="bi bi-file-earmark-excel"></i> Export
                             </button>
-                        </form>
+                            <form action="<?= base_url('/lecturer/subjects/' . $subject['id'] . '/toggle') ?>" method="post" class="d-inline">
+                                <?= csrf_field() ?>
+                                <button class="btn btn-sm <?= $subject['is_active'] ? 'btn-outline-warning' : 'btn-outline-success' ?>" type="submit">
+                                    <i class="bi <?= $subject['is_active'] ? 'bi-toggle-on' : 'bi-toggle-off' ?> me-1"></i>
+                                    <?= $subject['is_active'] ? 'Nonaktifkan' : 'Aktifkan' ?>
+                                </button>
+                            </form>
+                        </div>
                     </td>
                 </tr>
             <?php endforeach; ?>
@@ -67,4 +72,25 @@
         </table>
     </div>
 </div>
+<?= $this->endSection() ?>
+<?= $this->section('scripts') ?>
+<script>
+    function exportSubject(subjectId, kodeMk, namaMk) {
+        // Show loading indicator
+        const btn = event.target.closest('button');
+        const originalContent = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Exporting...';
+        btn.disabled = true;
+        
+        // Trigger download
+        const url = '<?= base_url('/lecturer/subjects/export') ?>/' + subjectId;
+        window.location.href = url;
+        
+        // Restore button after 2 seconds
+        setTimeout(() => {
+            btn.innerHTML = originalContent;
+            btn.disabled = false;
+        }, 2000);
+    }
+</script>
 <?= $this->endSection() ?>

@@ -15,6 +15,7 @@ $routes->get('logout', 'Auth::logout');
 
 $routes->group('lecturer', ['filter' => 'authguard:lecturer'], static function ($routes) {
     $routes->get('subjects', 'Lecturer\Subject::index');
+    $routes->get('subjects/export/(:num)', 'Lecturer\Subject::exportXls/$1');
     $routes->match(['get', 'post'], 'subjects/create', 'Lecturer\Subject::create');
     $routes->post('subjects/(:num)/toggle', 'Lecturer\Subject::toggle/$1');
 

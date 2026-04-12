@@ -130,6 +130,12 @@
             <span><?= esc(session()->getFlashdata('info')) ?></span>
         </div>
     <?php endif; ?>
+    <?php if (session()->getFlashdata('warning')): ?>
+        <div class="alert alert-warning d-flex align-items-center gap-2 mb-3" role="alert">
+            <i class="bi bi-exclamation-triangle-fill flex-shrink-0"></i>
+            <span><?= esc(session()->getFlashdata('warning')) ?></span>
+        </div>
+    <?php endif; ?>
 
     <?= $this->renderSection('content') ?>
 </main>

@@ -11,10 +11,41 @@
         <h4 class="page-title mb-0"><i class="bi bi-bar-chart-line me-2"></i>Rekap Absensi</h4>
         <p class="text-muted small mb-0 mt-1">Pantau kehadiran mahasiswa per pertemuan</p>
     </div>
-    <button type="button" class="btn btn-success d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#addManualModal">
+    <button type="button" class="btn btn-success d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#addManualModal" <?= empty($meetings) ? 'disabled' : '' ?>>
         <i class="bi bi-person-plus"></i> Tambah Absen Manual
     </button>
 </div>
+
+<!-- Filter Kelas -->
+<?php if (!empty($kelasList)): ?>
+<div class="card mb-4">
+    <div class="card-body py-3">
+        <div class="row g-2 align-items-center">
+            <div class="col-auto">
+                <label class="form-label mb-0 fw-600"><i class="bi bi-funnel me-1"></i>Filter Kelas:</label>
+            </div>
+            <div class="col-auto">
+                <select id="filterKelas" class="form-select form-select-sm" style="min-width:180px;">
+                    <option value="">Semua Kelas</option>
+                    <?php foreach ($kelasList as $k): ?>
+                        <option value="<?= esc($k) ?>" <?= isset($selectedKelas) && $selectedKelas === $k ? 'selected' : '' ?>><?= esc($k) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-auto">
+                <button type="button" class="btn btn-sm btn-outline-primary" id="btnApplyFilter">
+                    <i class="bi bi-check-circle me-1"></i>Terapkan
+                </button>
+            </div>
+            <div class="col-auto">
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="btnResetFilter">
+                    <i class="bi bi-x-circle me-1"></i>Reset
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <?php if (empty($meetings)): ?>
     <div class="card">
@@ -153,6 +184,25 @@
                 bodyEl.innerHTML = html;
             })
             .catch(() => { bodyEl.innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-1"></i>Gagal memuat data.</div>'; });
+    }
+
+    // Filter Kelas
+    const filterKelas = document.getElementById('filterKelas');
+    const btnApplyFilter = document.getElementById('btnApplyFilter');
+    const btnResetFilter = document.getElementById('btnResetFilter');
+
+    if (btnApplyFilter) {
+        btnApplyFilter.addEventListener('click', function() {
+            const kelas = filterKelas ? filterKelas.value : '';
+            window.location.href = kelas ? '?kelas=' + encodeURIComponent(kelas) : window.location.pathname;
+        });
+    }
+
+    if (btnResetFilter) {
+        btnResetFilter.addEventListener('click', function() {
+            if (filterKelas) filterKelas.value = '';
+            window.location.href = window.location.pathname;
+        });
     }
 </script>
 <?= $this->endSection() ?>
