@@ -102,6 +102,9 @@
                     <i class="bi bi-person-circle"></i> <?= esc(session('user_name')) ?>
                     <span class="badge ms-1" style="background:rgba(255,255,255,.2);font-size:.7rem;"><?= esc(session('role') === 'lecturer' ? 'Dosen' : 'Mahasiswa') ?></span>
                 </span>
+                <a href="<?= base_url('/profile') ?>" class="btn-logout d-flex align-items-center gap-1" title="Profile">
+                    <i class="bi bi-person-gear"></i>
+                </a>
                 <a href="<?= base_url('/logout') ?>" class="btn-logout d-flex align-items-center gap-1">
                     <i class="bi bi-box-arrow-right"></i> Logout
                 </a>

@@ -14,6 +14,11 @@ $routes->match(['get', 'post'], 'auth/change-password', 'Auth::changePassword');
 $routes->match(['get', 'post'], 'auth/forgot-password', 'Auth::forgotPassword');
 $routes->get('logout', 'Auth::logout');
 
+$routes->group('profile', ['filter' => 'authguard'], static function ($routes) {
+    $routes->get('/', 'Profile::index');
+    $routes->post('change-password', 'Profile::changePassword');
+});
+
 $routes->group('lecturer', ['filter' => 'authguard:lecturer'], static function ($routes) {
     $routes->get('subjects', 'Lecturer\Subject::index');
     $routes->get('subjects/export/(:num)', 'Lecturer\Subject::exportXls/$1');
