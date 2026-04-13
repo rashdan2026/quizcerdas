@@ -164,10 +164,10 @@
                         html += '<option value="' + k + '" ' + selected + '>' + k + '</option>';
                     });
                     html += '</select>';
-                    html += '<button type="button" class="btn btn-sm btn-outline-primary" onclick="applyModalFilter(' + meetingId + ', \'' + kodeMk.replace(/'/g, "\\'") + '\', \'' + pertemuan.replace(/'/g, "\\'") + '\', \'' + judul.replace(/'/g, "\\'") + '\')">';
+                    html += '<button type="button" class="btn btn-sm btn-outline-primary" onclick="event.preventDefault(); event.stopPropagation(); applyModalFilter(' + meetingId + ', \'' + kodeMk.replace(/'/g, "\\'") + '\', \'' + pertemuan.replace(/'/g, "\\'") + '\', \'' + judul.replace(/'/g, "\\'") + '\')">';
                     html += '<i class="bi bi-check-circle me-1"></i>Terapkan';
                     html += '</button>';
-                    html += '<button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetModalFilter(' + meetingId + ', \'' + kodeMk.replace(/'/g, "\\'") + '\', \'' + pertemuan.replace(/'/g, "\\'") + '\', \'' + judul.replace(/'/g, "\\'") + '\')">';
+                    html += '<button type="button" class="btn btn-sm btn-outline-secondary" onclick="event.preventDefault(); event.stopPropagation(); resetModalFilter(' + meetingId + ', \'' + kodeMk.replace(/'/g, "\\'") + '\', \'' + pertemuan.replace(/'/g, "\\'") + '\', \'' + judul.replace(/'/g, "\\'") + '\')">';
                     html += '<i class="bi bi-x-circle me-1"></i>Reset';
                     html += '</button>';
                     if (data.selectedKelas) {
@@ -203,14 +203,145 @@
 
     function applyModalFilter(meetingId, kodeMk, pertemuan, judul) {
         const kelas = document.getElementById('modalFilterKelas').value;
-        window.location.search = kelas ? 'kelas=' + encodeURIComponent(kelas) : '';
-        setTimeout(() => showDetail(meetingId, kodeMk, pertemuan, judul), 100);
+        const url = "<?= base_url('/lecturer/report/detail') ?>/" + meetingId + (kelas ? '?kelas=' + encodeURIComponent(kelas) : '');
+        
+        // Update URL tanpa reload (menggunakan History API)
+        const newUrl = window.location.pathname + (kelas ? '?kelas=' + encodeURIComponent(kelas) : '');
+        history.pushState({}, '', newUrl);
+        
+        // Fetch data baru dengan AJAX tanpa reload
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                const bodyEl = document.getElementById('detailModalBody');
+                const totalInfoEl = document.getElementById('modalTotalInfo');
+                
+                if (data.error) {
+                    bodyEl.innerHTML = '<div class="alert alert-danger">' + data.error + '</div>';
+                    return;
+                }
+
+                let html = '';
+
+                // Filter Kelas dropdown (di modal-body, atas)
+                if (data.kelasList && data.kelasList.length > 0) {
+                    html += '<div class="mb-3 p-3 rounded-3" style="background:#F8FAFC;border:1.5px solid #E2E8F0;">';
+                    html += '<div class="d-flex align-items-center gap-2 flex-wrap">';
+                    html += '<label class="form-label mb-0 fw-600"><i class="bi bi-funnel me-1"></i>Filter Kelas:</label>';
+                    html += '<select id="modalFilterKelas" class="form-select form-select-sm" style="min-width:180px;flex:1;">';
+                    html += '<option value="">Semua Kelas</option>';
+                    data.kelasList.forEach(k => {
+                        const selected = (data.selectedKelas === k) ? 'selected' : '';
+                        html += '<option value="' + k + '" ' + selected + '>' + k + '</option>';
+                    });
+                    html += '</select>';
+                    html += '<button type="button" class="btn btn-sm btn-outline-primary" onclick="event.preventDefault(); event.stopPropagation(); applyModalFilter(' + meetingId + ', \'' + kodeMk.replace(/'/g, "\\'") + '\', \'' + pertemuan.replace(/'/g, "\\'") + '\', \'' + judul.replace(/'/g, "\\'") + '\')">';
+                    html += '<i class="bi bi-check-circle me-1"></i>Terapkan';
+                    html += '</button>';
+                    html += '<button type="button" class="btn btn-sm btn-outline-secondary" onclick="event.preventDefault(); event.stopPropagation(); resetModalFilter(' + meetingId + ', \'' + kodeMk.replace(/'/g, "\\'") + '\', \'' + pertemuan.replace(/'/g, "\\'") + '\', \'' + judul.replace(/'/g, "\\'") + '\')">';
+                    html += '<i class="bi bi-x-circle me-1"></i>Reset';
+                    html += '</button>';
+                    if (data.selectedKelas) {
+                        html += '<span class="badge bg-info ms-1"><i class="bi bi-filter-circle me-1"></i>' + data.selectedKelas + '</span>';
+                    }
+                    html += '</div></div>';
+                }
+
+                // Tabel absensi
+                if (data.rows.length === 0) {
+                    html += '<div class="text-center py-4"><i class="bi bi-inbox display-6 text-muted d-block mb-2"></i><p class="text-muted">Belum ada mahasiswa yang absen.</p></div>';
+                } else {
+                    html += '<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>#</th><th>Email</th><th>Nama</th><th>Kelas</th><th>Waktu</th><th>Lokasi</th></tr></thead><tbody>';
+                    data.rows.forEach((r, i) => {
+                        const lok = (r.latitude && r.longitude)
+                            ? '<a href="https://www.google.com/maps?q=' + r.latitude + ',' + r.longitude + '" target="_blank" class="btn btn-xs btn-outline-success" style="font-size:.75rem;padding:2px 8px;border-radius:5px;"><i class="bi bi-geo-alt"></i> Maps</a>'
+                            : '<span class="text-muted small">-</span>';
+                        html += '<tr><td class="text-muted">' + (i+1) + '</td><td><code class="small">' + r.email + '</code></td><td class="fw-500">' + r.nama + '</td><td><span class="badge bg-secondary">' + (r.kelas||'-') + '</span></td><td><small class="text-muted">' + r.waktu_absen + '</small></td><td>' + lok + '</td></tr>';
+                    });
+                    html += '</tbody></table></div>';
+                }
+
+                bodyEl.innerHTML = html;
+
+                // Total absen di footer (sebelah kiri tombol Tutup)
+                const totalText = data.selectedKelas ? 'Total Absen (' + data.selectedKelas + '):' : 'Total Absen:';
+                totalInfoEl.innerHTML = '<span class="badge bg-success px-3 py-2" style="font-size:.9rem;"><i class="bi bi-people-fill me-1"></i>' + totalText + ' ' + data.rows.length + ' mahasiswa</span>';
+            })
+            .catch(() => {
+                document.getElementById('detailModalBody').innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-1"></i>Gagal memuat data.</div>';
+            });
     }
 
     function resetModalFilter(meetingId, kodeMk, pertemuan, judul) {
         document.getElementById('modalFilterKelas').value = '';
-        window.location.search = '';
-        setTimeout(() => showDetail(meetingId, kodeMk, pertemuan, judul), 100);
+        
+        // Update URL tanpa reload
+        const newUrl = window.location.pathname;
+        history.pushState({}, '', newUrl);
+        
+        const url = "<?= base_url('/lecturer/report/detail') ?>/" + meetingId;
+        
+        // Fetch data baru dengan AJAX tanpa reload
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                const bodyEl = document.getElementById('detailModalBody');
+                const totalInfoEl = document.getElementById('modalTotalInfo');
+                
+                if (data.error) {
+                    bodyEl.innerHTML = '<div class="alert alert-danger">' + data.error + '</div>';
+                    return;
+                }
+
+                let html = '';
+
+                // Filter Kelas dropdown (di modal-body, atas)
+                if (data.kelasList && data.kelasList.length > 0) {
+                    html += '<div class="mb-3 p-3 rounded-3" style="background:#F8FAFC;border:1.5px solid #E2E8F0;">';
+                    html += '<div class="d-flex align-items-center gap-2 flex-wrap">';
+                    html += '<label class="form-label mb-0 fw-600"><i class="bi bi-funnel me-1"></i>Filter Kelas:</label>';
+                    html += '<select id="modalFilterKelas" class="form-select form-select-sm" style="min-width:180px;flex:1;">';
+                    html += '<option value="">Semua Kelas</option>';
+                    data.kelasList.forEach(k => {
+                        const selected = (data.selectedKelas === k) ? 'selected' : '';
+                        html += '<option value="' + k + '" ' + selected + '>' + k + '</option>';
+                    });
+                    html += '</select>';
+                    html += '<button type="button" class="btn btn-sm btn-outline-primary" onclick="event.preventDefault(); event.stopPropagation(); applyModalFilter(' + meetingId + ', \'' + kodeMk.replace(/'/g, "\\'") + '\', \'' + pertemuan.replace(/'/g, "\\'") + '\', \'' + judul.replace(/'/g, "\\'") + '\')">';
+                    html += '<i class="bi bi-check-circle me-1"></i>Terapkan';
+                    html += '</button>';
+                    html += '<button type="button" class="btn btn-sm btn-outline-secondary" onclick="event.preventDefault(); event.stopPropagation(); resetModalFilter(' + meetingId + ', \'' + kodeMk.replace(/'/g, "\\'") + '\', \'' + pertemuan.replace(/'/g, "\\'") + '\', \'' + judul.replace(/'/g, "\\'") + '\')">';
+                    html += '<i class="bi bi-x-circle me-1"></i>Reset';
+                    html += '</button>';
+                    if (data.selectedKelas) {
+                        html += '<span class="badge bg-info ms-1"><i class="bi bi-filter-circle me-1"></i>' + data.selectedKelas + '</span>';
+                    }
+                    html += '</div></div>';
+                }
+
+                // Tabel absensi
+                if (data.rows.length === 0) {
+                    html += '<div class="text-center py-4"><i class="bi bi-inbox display-6 text-muted d-block mb-2"></i><p class="text-muted">Belum ada mahasiswa yang absen.</p></div>';
+                } else {
+                    html += '<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>#</th><th>Email</th><th>Nama</th><th>Kelas</th><th>Waktu</th><th>Lokasi</th></tr></thead><tbody>';
+                    data.rows.forEach((r, i) => {
+                        const lok = (r.latitude && r.longitude)
+                            ? '<a href="https://www.google.com/maps?q=' + r.latitude + ',' + r.longitude + '" target="_blank" class="btn btn-xs btn-outline-success" style="font-size:.75rem;padding:2px 8px;border-radius:5px;"><i class="bi bi-geo-alt"></i> Maps</a>'
+                            : '<span class="text-muted small">-</span>';
+                        html += '<tr><td class="text-muted">' + (i+1) + '</td><td><code class="small">' + r.email + '</code></td><td class="fw-500">' + r.nama + '</td><td><span class="badge bg-secondary">' + (r.kelas||'-') + '</span></td><td><small class="text-muted">' + r.waktu_absen + '</small></td><td>' + lok + '</td></tr>';
+                    });
+                    html += '</tbody></table></div>';
+                }
+
+                bodyEl.innerHTML = html;
+
+                // Total absen di footer (sebelah kiri tombol Tutup)
+                const totalText = data.selectedKelas ? 'Total Absen (' + data.selectedKelas + '):' : 'Total Absen:';
+                totalInfoEl.innerHTML = '<span class="badge bg-success px-3 py-2" style="font-size:.9rem;"><i class="bi bi-people-fill me-1"></i>' + totalText + ' ' + data.rows.length + ' mahasiswa</span>';
+            })
+            .catch(() => {
+                document.getElementById('detailModalBody').innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-1"></i>Gagal memuat data.</div>';
+            });
     }
 </script>
 <?= $this->endSection() ?>
