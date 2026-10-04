@@ -55,6 +55,10 @@ class Registration extends BaseController
             return redirect()->back()->withInput()->with('error', 'Password minimal 8 karakter.');
         }
 
+        if (strlen($kelas) !== 1) {
+            return redirect()->back()->withInput()->with('error', 'Kelas wajib diisi 1 karakter.');
+        }
+
         if ($password !== $passwd) {
             return redirect()->back()->withInput()->with('error', 'Konfirmasi password tidak sama.');
         }

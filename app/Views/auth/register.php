@@ -39,8 +39,9 @@
                                 <small class="text-muted">Contoh: 22090101</small>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">Kelas <span class="text-muted">(opsional)</span></label>
-                                <input type="text" name="kelas" class="form-control" maxlength="20" placeholder="Contoh: A1" value="<?= esc(old('kelas')) ?>">
+                                <label class="form-label">Kelas <span class="text-danger">*</span></label>
+                                <input type="text" name="kelas" class="form-control text-uppercase" maxlength="1" placeholder="A" value="<?= esc(old('kelas')) ?>" required>
+                                <small class="text-muted">1 karakter (A-Z)</small>
                             </div>
                         </div>
                         <div class="mb-3 mt-3">
