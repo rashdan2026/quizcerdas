@@ -12,6 +12,7 @@ class PdfFileModel extends Model
     protected $protectFields    = true;
     protected $allowedFields    = [
         'dosen_id',
+        'subject_id',
         'judul',
         'deskripsi',
         'file_name',

@@ -2,7 +2,10 @@
 
 <?= $this->section('content') ?>
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h4 class="mb-0">📁 Kelola File PDF</h4>
+    <div>
+        <h4 class="mb-0">📁 Kelola File PDF</h4>
+        <small class="text-danger">Total Ukuran File : <?= number_format($totalSize / 1024 / 1024, 2) ?> MB</small>
+    </div>
     <div class="d-flex gap-2">
         <a href="<?= base_url('/lecturer/meetings') ?>" class="btn btn-outline-secondary btn-sm">Pertemuan</a>
         <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#uploadModal">
@@ -22,6 +25,7 @@
             <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                 <tr>
+                    <th>Matakuliah</th>
                     <th>Judul</th>
                     <th>Deskripsi</th>
                     <th>Ukuran</th>
@@ -32,7 +36,11 @@
                 <tbody>
                 <?php foreach ($files as $f): ?>
                     <tr>
-                        <td><strong><?= esc($f['judul']) ?></strong></td>
+                        <td>
+                            <span class="text-muted"><?= esc($f['kode_mk'] ?? '-') ?></span>
+                            <br><strong><?= esc($f['nama_mk'] ?? '-') ?></strong>
+                        </td>
+                        <td><?= esc($f['judul']) ?></td>
                         <td><small class="text-muted"><?= esc($f['deskripsi'] ?? '-') ?></small></td>
                         <td><small><?= esc(number_format($f['file_size'] / 1024, 1)) ?> KB</small></td>
                         <td><small><?= esc(date('d M Y', strtotime($f['created_at']))) ?></small></td>
@@ -60,6 +68,15 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Matakuliah <span class="text-danger">*</span></label>
+                        <select name="subject_id" class="form-select" required>
+                            <option value="">— Pilih Matakuliah —</option>
+                            <?php foreach ($subjects as $s): ?>
+                                <option value="<?= $s['id'] ?>"><?= esc($s['kode_mk']) ?> - <?= esc($s['nama_mk']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                     <div class="mb-3">
                         <label class="form-label">Judul File <span class="text-danger">*</span></label>
                         <input type="text" name="judul" class="form-control" maxlength="30" placeholder="Contoh: Pengenalan Database" required>

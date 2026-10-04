@@ -48,7 +48,7 @@ class Meeting extends BaseController
         // Daftar PDF yang tersedia
         $pdfFiles = db_connect()->table('pdf_files')
             ->where('dosen_id', session('user_id'))
-            ->orderBy('judul', 'ASC')
+            ->orderBy('updated_at', 'DESC')
             ->get()
             ->getResultArray();
 
@@ -164,7 +164,7 @@ class Meeting extends BaseController
         // Daftar PDF yang tersedia
         $pdfFiles = db_connect()->table('pdf_files')
             ->where('dosen_id', session('user_id'))
-            ->orderBy('judul', 'ASC')
+            ->orderBy('updated_at', 'DESC')
             ->get()
             ->getResultArray();
 

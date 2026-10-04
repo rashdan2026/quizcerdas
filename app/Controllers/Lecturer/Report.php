@@ -28,6 +28,7 @@ class Report extends BaseController
                 ->join('subjects s', 's.id = m.subject_id')
                 ->join('attendance a', 'a.meeting_id = m.id', 'left')
                 ->where('s.dosen_id', $dosenId)
+                ->where('s.is_active', 1)
                 ->groupBy('m.id')
                 ->orderBy('m.id', 'DESC')
                 ->get()

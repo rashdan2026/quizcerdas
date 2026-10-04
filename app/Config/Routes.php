@@ -9,6 +9,12 @@ $routes->get('/', 'Home::index');
 
 $routes->match(['get', 'post'], 'auth', 'Auth::index');
 $routes->post('auth/login', 'Auth::login');
+
+$routes->get('register', 'Registration::index');
+$routes->post('register', 'Registration::register');
+$routes->get('register/verify-email', 'Registration::verifyEmail');
+$routes->post('register/verify-email', 'Registration::confirmVerify');
+$routes->post('register/resend-otp', 'Registration::resendOtp');
 $routes->match(['get', 'post'], 'auth/otp', 'Auth::otp');
 $routes->match(['get', 'post'], 'auth/change-password', 'Auth::changePassword');
 $routes->match(['get', 'post'], 'auth/forgot-password', 'Auth::forgotPassword');

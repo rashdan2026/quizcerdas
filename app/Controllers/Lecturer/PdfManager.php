@@ -23,12 +23,29 @@ class PdfManager extends BaseController
     public function index()
     {
         $dosenId = session('user_id');
-        $files   = (new PdfFileModel())
-            ->where('dosen_id', $dosenId)
-            ->orderBy('id', 'DESC')
-            ->findAll();
 
-        return view('lecturer/pdf_manager', ['files' => $files]);
+        $files = db_connect()->table('pdf_files pf')
+            ->select('pf.*, s.kode_mk, s.nama_mk')
+            ->join('subjects s', 's.id = pf.subject_id', 'left')
+            ->where('pf.dosen_id', $dosenId)
+            ->orderBy('pf.id', 'DESC')
+            ->get()
+            ->getResultArray();
+
+        $subjects = db_connect()->table('subjects')
+            ->where('dosen_id', $dosenId)
+            ->where('is_active', 1)
+            ->orderBy('nama_mk', 'ASC')
+            ->get()
+            ->getResultArray();
+
+        $totalSize = array_sum(array_column($files, 'file_size'));
+
+        return view('lecturer/pdf_manager', [
+            'files' => $files,
+            'subjects' => $subjects,
+            'totalSize' => $totalSize,
+        ]);
     }
 
     /**
@@ -42,7 +59,24 @@ class PdfManager extends BaseController
 
         $judul     = trim((string) $this->request->getPost('judul'));
         $deskripsi = trim((string) $this->request->getPost('deskripsi'));
+        $subjectId = (int) $this->request->getPost('subject_id');
         $dosenId   = session('user_id');
+
+        // Validasi subject_id
+        if ($subjectId <= 0) {
+            return redirect()->back()->withInput()->with('error', 'Matakuliah wajib dipilih.');
+        }
+
+        $subject = db_connect()->table('subjects')
+            ->where('id', $subjectId)
+            ->where('dosen_id', $dosenId)
+            ->where('is_active', 1)
+            ->get()
+            ->getRowArray();
+
+        if (! $subject) {
+            return redirect()->back()->withInput()->with('error', 'Matakuliah tidak valid atau tidak aktif.');
+        }
 
         // Validasi judul
         if ($judul === '' || strlen($judul) > 30) {
@@ -79,6 +113,7 @@ class PdfManager extends BaseController
         // Simpan ke database
         (new PdfFileModel())->insert([
             'dosen_id'  => $dosenId,
+            'subject_id' => $subjectId,
             'judul'     => $judul,
             'deskripsi' => $deskripsi !== '' ? $deskripsi : null,
             'file_name' => $fileName,

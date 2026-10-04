@@ -50,6 +50,13 @@
                             <i class="bi bi-key me-1"></i>Lupa Password?
                         </a>
                     </div>
+                    <hr class="my-3" style="border-color:#E2E8F0;">
+                    <div class="text-center">
+                        <span class="text-muted small">Belum punya akun?</span>
+                        <a href="<?= base_url('/register') ?>" class="text-decoration-none small ms-1" style="color:#059669;">
+                            <i class="bi bi-person-plus me-1"></i>Daftar di sini
+                        </a>
+                    </div>
                 </form>
             </div>
         </div>
