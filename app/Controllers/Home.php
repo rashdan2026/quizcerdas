@@ -12,6 +12,6 @@ class Home extends BaseController
                 : redirect()->to('/student/dashboard');
         }
 
-        return redirect()->to('/register');
+        return redirect()->to('/auth');
     }
 }
