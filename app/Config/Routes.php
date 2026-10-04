@@ -49,6 +49,7 @@ $routes->group('lecturer', ['filter' => 'authguard:lecturer'], static function (
 
 $routes->group('student', ['filter' => 'authguard:student'], static function ($routes) {
     $routes->get('dashboard', 'Student\Dashboard::index');
+    $routes->get('dashboard/edit-profile', 'Student\Dashboard::editProfile');
     $routes->match(['get', 'post'], 'scan', 'Student\Scan::index');
     $routes->post('scan/submit', 'Student\Scan::submit');
     $routes->get('detail/(:num)', 'Student\Scan::detail/$1');

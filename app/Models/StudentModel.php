@@ -19,6 +19,7 @@ class StudentModel extends Model
         'passwd',
         'kelas',
         'no_whatsapp',
+        'profile_updated_at',
         'last_login',
         'login_count',
         'created_at',
