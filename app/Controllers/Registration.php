@@ -189,7 +189,7 @@ class Registration extends BaseController
             'email'   => $pendingData['email'],
             'nama'    => $pendingData['nama'],
             'kelas'   => $pendingData['kelas'] ?: null,
-            'no_whatsapp' => $pendingData['no_whatsapp'] ?: null,
+            'no_whatsapp' => $pendingData['no_whatsapp'] ?: '',
             'password' => $pendingData['password'],
         ]);
 
