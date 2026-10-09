@@ -95,23 +95,36 @@
     const csrfName    = "<?= csrf_token() ?>";
     let csrfHash      = "<?= csrf_hash() ?>";
     const countdownEl = document.getElementById('countdown');
-    let timeLeft      = Math.max(1, <?= $remaining ?>);
+    const initialLeft = <?= (int) $remaining ?>;
+    let timeLeft      = Math.max(1, initialLeft);
+    let isRefreshing  = false;
 
     async function refreshToken() {
-        const body = new URLSearchParams();
-        body.append(csrfName, csrfHash);
-        const response = await fetch(refreshUrl, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body });
-        if (!response.ok) return;
-        const data = await response.json();
-        csrfHash = data.csrfHash ?? csrfHash;
-        document.getElementById('qrImage').src = data.qr_url;
-        document.getElementById('qrPayload').innerText = data.token_qr;
-        timeLeft = 45;
-        tick();
+        if (isRefreshing) return;
+        isRefreshing = true;
+        try {
+            const body = new URLSearchParams();
+            body.append(csrfName, csrfHash);
+            const response = await fetch(refreshUrl, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body });
+            if (!response.ok) return;
+            const data = await response.json();
+            csrfHash = data.csrfHash ?? csrfHash;
+            document.getElementById('qrImage').src = data.qr_url;
+            document.getElementById('qrPayload').innerText = data.token_qr;
+            timeLeft = 45;
+            tick();
+        } finally {
+            isRefreshing = false;
+        }
     }
 
     function tick() {
-        if (timeLeft <= 0) { countdownEl.textContent = '0 detik'; countdownEl.className = 'qr-timer expired'; return; }
+        if (timeLeft <= 0) {
+            countdownEl.textContent = '0 detik';
+            countdownEl.className = 'qr-timer expired';
+            refreshToken();
+            return;
+        }
         countdownEl.textContent = timeLeft + ' detik';
         if (timeLeft <= 5) countdownEl.className = 'qr-timer danger';
         else if (timeLeft <= 15) countdownEl.className = 'qr-timer warning';
@@ -119,7 +132,13 @@
         timeLeft--;
     }
 
-    tick();
+    if (initialLeft <= 0) {
+        countdownEl.textContent = '0 detik';
+        countdownEl.className = 'qr-timer expired';
+        refreshToken();
+    } else {
+        tick();
+    }
     setInterval(tick, 1000);
     setInterval(refreshToken, 45000);
 </script>
