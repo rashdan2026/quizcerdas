@@ -70,8 +70,11 @@ class Security extends BaseConfig
      * --------------------------------------------------------------------------
      *
      * Regenerate CSRF Token on every submission.
+     * Disabling improves UX (form dapat di-submit ulang setelah validation error
+     * tanpa refresh halaman, dan tahan terhadap multi-tab session changes).
+     * Keamanan tetap terjaga karena token dicek di setiap POST.
      */
-    public bool $regenerate = true;
+    public bool $regenerate = false;
 
     /**
      * --------------------------------------------------------------------------

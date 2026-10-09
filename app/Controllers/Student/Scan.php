@@ -3,11 +3,22 @@
 namespace App\Controllers\Student;
 
 use App\Controllers\BaseController;
+use App\Libraries\AdService;
 use App\Models\AttendanceModel;
 use App\Models\MeetingModel;
 
 class Scan extends BaseController
 {
+    /**
+     * Toleransi grace period (detik) setelah expired_at untuk tetap menerima
+     * token yang baru saja di-rotate. Sebelumnya logika ini BROKEN — hanya
+     * cek `expired_at >= now - 60` tanpa memverifikasi token, sehingga token
+     * expired berapa pun umurnya bisa dipakai selama meeting masih aktif
+     * di-refresh (45 detik). Sekarang cek token sebelumnya valid dalam
+     * window grace period.
+     */
+    private const TOKEN_GRACE_SECONDS = 60;
+
     public function index()
     {
         $meetings = db_connect()->table('meetings m')
@@ -46,24 +57,11 @@ class Scan extends BaseController
             return redirect()->back()->withInput()->with('error', 'Pertemuan tidak ditemukan.');
         }
 
-        if ($meeting['token_qr'] !== $token) {
-            // Toleransi: cek apakah token yang di-input adalah token yang baru saja diganti
-            // (grace period 60 detik untuk mengantisipasi keterlambatan scan/submit)
-            $db         = db_connect();
-            $recentRows = $db->table('meetings')
-                ->select('id')
-                ->where('id', $meetingId)
-                ->where('expired_at >=', date('Y-m-d H:i:s', time() - 60))
-                ->get()
-                ->getResultArray();
-
-            if (empty($recentRows)) {
-                return redirect()->back()->withInput()->with('error', 'Token QR tidak sinkron dengan server.');
-            }
-            // Jika masih dalam grace period, lanjutkan proses
+        if (! $this->isTokenValid($meeting, $token)) {
+            return redirect()->back()->withInput()->with('error', 'Token QR tidak valid atau sudah kedaluwarsa. Silakan scan ulang.');
         }
 
-        if (strtotime($meeting['expired_at']) < time() - 60) {
+        if (strtotime((string) $meeting['expired_at']) < time() - self::TOKEN_GRACE_SECONDS) {
             return redirect()->back()->withInput()->with('error', 'Token QR sudah kedaluwarsa. Silakan scan ulang.');
         }
 
@@ -114,12 +112,11 @@ class Scan extends BaseController
             return $this->response->setJSON(['valid' => false, 'message' => 'Pertemuan tidak ditemukan.']);
         }
 
-        if ($meeting['token_qr'] !== $token) {
-            return $this->response->setJSON(['valid' => false, 'message' => 'Token QR tidak cocok dengan server.']);
+        if (! $this->isTokenValid($meeting, $token)) {
+            return $this->response->setJSON(['valid' => false, 'message' => 'Token QR tidak valid atau sudah kedaluwarsa. Silakan scan ulang.']);
         }
 
-        // Toleransi grace period 60 detik setelah expired_at
-        if (strtotime($meeting['expired_at']) < time() - 60) {
+        if (strtotime((string) $meeting['expired_at']) < time() - self::TOKEN_GRACE_SECONDS) {
             return $this->response->setJSON(['valid' => false, 'message' => 'Token QR sudah kedaluwarsa. Silakan scan ulang.']);
         }
 
@@ -141,11 +138,21 @@ class Scan extends BaseController
         }
 
         $db      = db_connect();
+        // Lookup by current token (grace period via expired_at >= now-60)
         $meeting = $db->table('meetings')
             ->where('token_qr', $token)
             ->where('expired_at >=', date('Y-m-d H:i:s', time() - 60))
             ->get()
             ->getRowArray();
+
+        if (! $meeting) {
+            // Fallback: lookup by previous token (yang baru di-rotate)
+            $meeting = $db->table('meetings')
+                ->where('previous_token_qr', $token)
+                ->where('previous_token_expired_at >=', date('Y-m-d H:i:s', time() - 60))
+                ->get()
+                ->getRowArray();
+        }
 
         if (! $meeting) {
             return $this->response->setJSON(['found' => false, 'message' => 'Token QR tidak aktif atau tidak ditemukan.']);
@@ -204,6 +211,46 @@ class Scan extends BaseController
             }
         }
 
-        return view('student/detail', ['meeting' => $row, 'pdfToken' => $pdfToken]);
+        $adService = new AdService();
+        $ad        = $adService->pickAdForDisplay('pdf');
+
+        $linkModel = new \App\Models\MeetingLinkModel();
+        $links     = $linkModel->getByMeeting($meetingId);
+
+        return view('student/detail', [
+            'meeting'   => $row,
+            'pdfToken'  => $pdfToken,
+            'pdfAd'     => $ad,
+            'adLockSec' => $adService->getLockSeconds(),
+            'links'     => $links,
+        ]);
+    }
+
+    /**
+     * Validasi token QR — harus match current ATAU previous (jika previous
+     * masih dalam grace period). Mencegah token expired berapa pun umurnya
+     * diterima hanya karena meeting masih aktif di-refresh.
+     */
+    private function isTokenValid(array $meeting, string $token): bool
+    {
+        if ($token === '') {
+            return false;
+        }
+
+        // Match dengan token saat ini
+        if (hash_equals((string) $meeting['token_qr'], $token)) {
+            return true;
+        }
+
+        // Match dengan token sebelumnya (previous) — hanya jika masih dalam grace period
+        if (! empty($meeting['previous_token_qr'])
+            && hash_equals((string) $meeting['previous_token_qr'], $token)
+            && ! empty($meeting['previous_token_expired_at'])
+            && strtotime((string) $meeting['previous_token_expired_at']) >= time() - self::TOKEN_GRACE_SECONDS
+        ) {
+            return true;
+        }
+
+        return false;
     }
 }

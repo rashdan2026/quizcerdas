@@ -3,6 +3,7 @@
 namespace Config;
 
 use App\Filters\AuthGuard;
+use App\Filters\MaintenanceFilter;
 use CodeIgniter\Config\Filters as BaseFilters;
 use CodeIgniter\Filters\Cors;
 use CodeIgniter\Filters\CSRF;
@@ -36,6 +37,7 @@ class Filters extends BaseFilters
         'pagecache'     => PageCache::class,
         'performance'   => PerformanceMetrics::class,
         'authguard'     => AuthGuard::class,
+        'maintenance'   => MaintenanceFilter::class,
     ];
 
     /**
@@ -73,6 +75,7 @@ class Filters extends BaseFilters
     public array $globals = [
         'before' => [
             // 'honeypot',
+            'maintenance',  // Jalan pertama — non-admin selalu dapat halaman maintenance duluan
             'csrf',
             // 'invalidchars',
         ],

@@ -37,6 +37,7 @@ Write-Host ""
 Write-Host "✗ File yang TIDAK akan di-upload:" -ForegroundColor Red
 Write-Host "  - .env (keamanan)"
 Write-Host "  - vendor/ (composer dependencies)"
+Write-Host "  - doc/ (dokumentasi lokal)"
 Write-Host "  - test_*.php, *_test.php (file testing)"
 Write-Host "  - debug*.php, update_*.php (file debug)"
 Write-Host "  - error.jpg, gambar.png (media non-essential)"
@@ -45,9 +46,15 @@ Write-Host "  - .qwen/, .vscode/, .idea/ (editor configs)"
 Write-Host "  - writable/logs/*, writable/session/*, writable/cache/*, writable/uploads/*"
 Write-Host ""
 
-# 4. Reset staging area dan tambahkan file sesuai .gitignore
+# 4. Reset staging area, buang doc/ dari index (jika pernah ter-track), dan tambahkan file sesuai .gitignore
 Write-Host "🚀 Memproses file..." -ForegroundColor Blue
 git reset
+# Untrack folder doc/ dari git (file lokal tetap ada, hanya tidak di-push)
+$docTracked = git ls-files -- doc 2>$null
+if ($docTracked) {
+    Write-Host "  ✓ Menghapus doc/ dari tracking Git (lokal tetap ada)" -ForegroundColor Yellow
+    git rm -r --cached doc 2>$null
+}
 git add .
 
 # 5. Cek apakah ada perubahan yang perlu di-upload

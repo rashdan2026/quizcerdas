@@ -29,7 +29,7 @@
                         <label class="form-label"><i class="bi bi-lock me-1"></i>Password</label>
                         <div class="input-group">
                             <input type="password" name="password" id="pwdField" class="form-control" placeholder="••••••••" required>
-                            <button type="button" class="btn btn-outline-secondary" onclick="togglePwd()" tabindex="-1" style="border-radius:0 8px 8px 0;border-left:0;">
+                            <button type="button" id="togglePwdBtn" class="btn btn-outline-secondary" onclick="togglePwd()" tabindex="-1" aria-label="Tampilkan atau sembunyikan password" style="border-radius:0 8px 8px 0;border-left:0;">
                                 <i class="bi bi-eye" id="eyeIcon"></i>
                             </button>
                         </div>
@@ -72,4 +72,7 @@ function togglePwd() {
     else { f.type = 'password'; i.className = 'bi bi-eye'; }
 }
 </script>
+<?php if (! empty($loginAd)): ?>
+<?= view('partials/ad_modal', ['ad' => $loginAd, 'lockSeconds' => $adLockSec, 'placement' => 'login']) ?>
+<?php endif; ?>
 <?= $this->endSection() ?>

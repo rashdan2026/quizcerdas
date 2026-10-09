@@ -20,9 +20,48 @@ $routes->match(['get', 'post'], 'auth/change-password', 'Auth::changePassword');
 $routes->match(['get', 'post'], 'auth/forgot-password', 'Auth::forgotPassword');
 $routes->get('logout', 'Auth::logout');
 
+$routes->get('media/gfx/(:any)', 'AdImage::serve/$1');
+$routes->get('ad/click/(:num)', 'AdClick::track/$1');
+$routes->get('maintenance', function () { return view('maintenance', ['appName' => (new \App\Models\AppSettingModel())->getValue('app_name', 'Sistem Absensi Kampus')]); });
+
 $routes->group('profile', ['filter' => 'authguard'], static function ($routes) {
     $routes->get('/', 'Profile::index');
     $routes->post('change-password', 'Profile::changePassword');
+});
+
+$routes->group('admin', static function ($routes) {
+    $routes->match(['get', 'post'], 'login', 'Admin\Auth::login');
+    $routes->get('logout', 'Admin\Auth::logout');
+
+    $routes->group('', ['filter' => 'authguard:admin'], static function ($routes) {
+        $routes->get('/', 'Admin\Dashboard::index');
+        $routes->get('dashboard', 'Admin\Dashboard::index');
+
+        $routes->get('ads', 'Admin\Ads::index');
+        $routes->get('ads/click-report', 'Admin\Ads::clickReport');
+        $routes->get('ads/create', 'Admin\Ads::create');
+        $routes->get('ads/(:num)/edit', 'Admin\Ads::edit/$1');
+        $routes->post('ads/save', 'Admin\Ads::save');
+        $routes->post('ads/(:num)/toggle', 'Admin\Ads::toggle/$1');
+        $routes->post('ads/(:num)/delete', 'Admin\Ads::delete/$1');
+        $routes->post('ads/reset-impressions', 'Admin\Ads::resetImpressions');
+
+        $routes->get('lecturers', 'Admin\Lecturer::index');
+        $routes->get('lecturers/create', 'Admin\Lecturer::create');
+        $routes->get('lecturers/(:num)/edit', 'Admin\Lecturer::edit/$1');
+        $routes->post('lecturers/save', 'Admin\Lecturer::save');
+        $routes->post('lecturers/(:num)/toggle', 'Admin\Lecturer::toggle/$1');
+        $routes->post('lecturers/(:num)/reset-password', 'Admin\Lecturer::resetPassword/$1');
+
+        $routes->get('students', 'Admin\Student::index');
+        $routes->get('students/(:any)/edit', 'Admin\Student::edit/$1');
+        $routes->post('students/save', 'Admin\Student::save');
+        $routes->post('students/(:any)/reset-password', 'Admin\Student::resetPassword/$1');
+        $routes->post('students/reset-all-otp-counters', 'Admin\Student::resetAllOtpCounters');
+
+        $routes->get('settings', 'Admin\Settings::index');
+        $routes->post('settings/save', 'Admin\Settings::save');
+    });
 });
 
 $routes->group('lecturer', ['filter' => 'authguard:lecturer'], static function ($routes) {

@@ -61,6 +61,18 @@
                         </small>
                     </div>
 
+                    <!-- Link Referensi (maks 3) -->
+                    <div class="mb-3">
+                        <label class="form-label">Link Referensi <span class="text-muted">(opsional, maks <?= (int) ($maxLinks ?? 3) ?>)</span></label>
+                        <div id="linksContainer"></div>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="addLinkBtn" onclick="addLinkRow()">
+                            <i class="bi bi-plus-circle me-1"></i>Tambah Link
+                        </button>
+                        <small class="text-muted d-block mt-2">
+                            Tipe <strong>YouTube</strong> akan di-embed langsung di halaman mahasiswa. Tipe <strong>File</strong> akan terbuka di tab baru.
+                        </small>
+                    </div>
+
                     <div class="d-flex gap-2">
                         <a href="<?= base_url('/lecturer/meetings') ?>" class="btn btn-outline-secondary">Kembali</a>
                         <button class="btn btn-primary" type="submit">💾 Simpan Perubahan</button>
@@ -161,8 +173,59 @@
             row.style.display = match ? '' : 'none';
             if (match) visibleCount++;
         });
-        document.getElementById('pdfCountInfo').textContent = 
+        document.getElementById('pdfCountInfo').textContent =
             query ? `Ditemukan ${visibleCount} file` : `Menampilkan ${rows.length} file`;
     }
+
+    // ── Link Referensi: dynamic add/remove (maks 3) ──
+    const MAX_LINKS = <?= (int) ($maxLinks ?? 3) ?>;
+    let linkIdx = 0;
+    function addLinkRow(type = 'youtube', url = '') {
+        const container = document.getElementById('linksContainer');
+        if (container.children.length >= MAX_LINKS) {
+            updateLinkBtn();
+            return;
+        }
+        const idx = linkIdx++;
+        const row = document.createElement('div');
+        row.className = 'input-group mb-2 link-row';
+        row.dataset.idx = idx;
+        row.innerHTML = `
+            <select name="links[${idx}][link_type]" class="form-select" style="max-width:140px;">
+                <option value="youtube" ${type === 'youtube' ? 'selected' : ''}>📺 YouTube</option>
+                <option value="file" ${type === 'file' ? 'selected' : ''}>📄 File</option>
+            </select>
+            <input type="url" name="links[${idx}][url]" class="form-control" placeholder="https://..." value="${escapeAttr(url)}">
+            <button type="button" class="btn btn-outline-danger" onclick="removeLinkRow(this)" title="Hapus baris ini">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        `;
+        container.appendChild(row);
+        updateLinkBtn();
+    }
+    function removeLinkRow(btn) {
+        btn.closest('.link-row').remove();
+        updateLinkBtn();
+    }
+    function updateLinkBtn() {
+        const container = document.getElementById('linksContainer');
+        const btn = document.getElementById('addLinkBtn');
+        btn.disabled = container.children.length >= MAX_LINKS;
+        btn.innerHTML = container.children.length >= MAX_LINKS
+            ? '<i class="bi bi-x-circle me-1"></i>Maks ' + MAX_LINKS + ' link tercapai'
+            : '<i class="bi bi-plus-circle me-1"></i>Tambah Link';
+    }
+    function escapeAttr(s) {
+        return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    }
+
+    // Pre-populate existing links (mode edit)
+    <?php if (! empty($existingLinks)): ?>
+        <?php foreach ($existingLinks as $lk): ?>
+            addLinkRow(<?= json_encode($lk['link_type']) ?>, <?= json_encode($lk['url']) ?>);
+        <?php endforeach; ?>
+    <?php else: ?>
+        addLinkRow();
+    <?php endif; ?>
 </script>
 <?= $this->endSection() ?>

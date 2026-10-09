@@ -3,6 +3,7 @@
 namespace App\Controllers\Student;
 
 use App\Controllers\BaseController;
+use App\Libraries\AdService;
 use App\Models\StudentModel;
 
 class Dashboard extends BaseController

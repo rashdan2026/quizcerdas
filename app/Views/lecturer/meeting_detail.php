@@ -87,6 +87,35 @@
             </div>
         </div>
     </div>
+
+    <?php if (! empty($links)): ?>
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <i class="bi bi-link-45deg me-2 text-primary"></i>Link Referensi (<?= count($links) ?>)
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    <?php foreach ($links as $lk): ?>
+                        <div class="list-group-item d-flex align-items-center gap-3">
+                            <span class="badge bg-<?= $lk['link_type'] === 'youtube' ? 'danger' : 'secondary' ?>-soft fs-6">
+                                <?= $lk['link_type'] === 'youtube' ? '📺 YouTube' : '📄 File' ?>
+                            </span>
+                            <a href="<?= esc($lk['url']) ?>" target="_blank" rel="noopener noreferrer" class="text-truncate flex-grow-1">
+                                <?= esc($lk['url']) ?>
+                            </a>
+                            <?php if ($lk['link_type'] === 'youtube'): ?>
+                                <small class="text-muted">→ di-embed di halaman mahasiswa</small>
+                            <?php else: ?>
+                                <small class="text-muted">→ terbuka di tab baru</small>
+                            <?php endif; ?>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
 </div>
 <?= $this->endSection() ?>
 <?= $this->section('scripts') ?>

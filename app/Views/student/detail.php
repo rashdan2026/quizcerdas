@@ -147,6 +147,55 @@
             </div>
         </div>
     </div>
+
+    <?php if (! empty($links)):
+        $youtubeLinks = array_filter($links, fn($l) => $l['link_type'] === 'youtube');
+        $fileLinks    = array_values(array_filter($links, fn($l) => $l['link_type'] === 'file'));
+    ?>
+
+        <?php if (! empty($fileLinks)): ?>
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <i class="bi bi-link-45deg me-2 text-primary"></i>File Referensi
+                </div>
+                <div class="card-body">
+                    <?php $i = 1; $fileCount = count($fileLinks); foreach ($fileLinks as $lk): ?>
+                        <div class="d-flex flex-wrap align-items-center gap-2 mb-2 py-1">
+                            <span class="fw-semibold" style="color:#475569;min-width:160px;">File Referensi<?= $fileCount > 1 ? ' ' . $i : '' ?> :</span>
+                            <a href="<?= esc($lk['url']) ?>" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">
+                                <i class="bi bi-box-arrow-up-right me-1"></i>Buka File
+                            </a>
+                            <small class="text-muted text-truncate" style="max-width:380px;" title="<?= esc($lk['url']) ?>">
+                                <?= esc($lk['url']) ?>
+                            </small>
+                        </div>
+                    <?php $i++; endforeach; ?>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <?php $ytNum = 1; foreach ($youtubeLinks as $lk):
+            $embed = \App\Controllers\Lecturer\Meeting::youtubeEmbedUrl($lk['url']);
+            if ($embed === null) continue;
+        ?>
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <i class="bi bi-youtube me-2 text-danger"></i>Video YouTube
+                </div>
+                <div class="card-body">
+                    <div class="ratio ratio-16x9" style="background:#000;border-radius:8px;overflow:hidden;">
+                        <iframe src="<?= esc($embed) ?>" title="YouTube video <?= $ytNum ?>" allowfullscreen
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                style="border:0;"></iframe>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php $ytNum++; endforeach; ?>
+    <?php endif; ?>
 </div>
 <?= $this->endSection() ?>
 
@@ -163,7 +212,7 @@
     let pageRendering = false;
     let pageNumPending = null;
     let currentScale = 1.0;   // zoom level (1.0 = 100%)
-    let baseScale  = 1.5;      // base render scale for PDF.js
+    let baseScale  = 2.0;      // base render scale for PDF.js (naik dari 1.5 agar lebih tajam)
     const minScale = 0.5;      // 50%
     const maxScale = 3.0;      // 300%
     const scaleStep = 0.25;    // 25% per step
@@ -297,4 +346,18 @@
     });
     document.addEventListener('contextmenu', e => { if (e.target.closest('.pdf-frame')) e.preventDefault(); });
 </script>
+<?php if (! empty($pdfAd)): ?>
+<?= view('partials/ad_modal', ['ad' => $pdfAd, 'lockSeconds' => $adLockSec, 'placement' => 'pdf']) ?>
+<script>
+// Pastikan PDF container tetap bisa di-scroll setelah modal ditutup
+(function(){
+    var el = document.getElementById('mediaModal');
+    if (!el) return;
+    el.addEventListener('hidden.bs.modal', function(){
+        var c = document.getElementById('pdfContainer');
+        if (c) { c.style.overflow = 'auto'; c.style.pointerEvents = 'auto'; }
+    });
+})();
+</script>
+<?php endif; ?>
 <?= $this->endSection() ?>

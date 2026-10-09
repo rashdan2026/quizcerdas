@@ -14,6 +14,7 @@ class LecturerModel extends Model
         'nama',
         'email',
         'password',
+        'is_active',
         'last_login',
         'created_at',
         'updated_at',

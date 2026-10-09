@@ -2,23 +2,42 @@
 
 namespace App\Controllers;
 
+use App\Libraries\AdService;
 use App\Models\LecturerModel;
 use App\Models\OtpCodeModel;
 use App\Models\StudentModel;
 
 class Auth extends BaseController
 {
+    protected AdService $adService;
+
+    public function __construct()
+    {
+        $this->adService = new AdService();
+    }
+
     public function index()
     {
         if (session('logged_in')) {
-            return session('role') === 'lecturer'
-                ? redirect()->to('/lecturer/subjects')
-                : redirect()->to('/student/dashboard');
+            $role = session('role');
+            if ($role === 'admin') {
+                return redirect()->to('/admin/dashboard');
+            }
+            if ($role === 'lecturer') {
+                return redirect()->to('/lecturer/subjects');
+            }
+            return redirect()->to('/student/dashboard');
         }
 
         $captcha = $this->generateCaptcha();
 
-        return view('auth/login', ['captcha' => $captcha]);
+        $data = [
+            'captcha'      => $captcha,
+            'loginAd'      => $this->adService->pickAdForDisplay('login'),
+            'adLockSec'    => $this->adService->getLockSeconds(),
+        ];
+
+        return view('auth/login', $data);
     }
 
     public function login()
@@ -74,8 +93,9 @@ class Auth extends BaseController
             $loginCount = ((int) ($student['login_count'] ?? 0)) + 1;
             $studentModel->update($student['email'], ['login_count' => $loginCount]);
 
-            // OTP diperlukan setiap 5 kali login
-            $requireOtp = ($loginCount % 5 === 0);
+            // OTP diperlukan setiap N kali login (N dari app_settings, default 5)
+            $otpEvery = (int) (new \App\Models\AppSettingModel())->getValue('student_otp_every_n_logins', 5);
+            $requireOtp = $otpEvery > 0 && ($loginCount % $otpEvery === 0);
 
             if (! $requireOtp) {
                 // Langsung login tanpa OTP
@@ -85,6 +105,10 @@ class Auth extends BaseController
                     'user_id'   => $student['email'],
                     'user_name' => $student['nama'],
                 ]);
+
+                // Reset state iklan setelah login berhasil — dashboard akan
+                // melihat iklan berbeda dari yang tampil di halaman login
+                (new AdService())->clearCurrentView();
 
                 return redirect()->to('/student/dashboard')
                     ->with('success', 'Login mahasiswa berhasil.');
@@ -99,14 +123,14 @@ class Auth extends BaseController
 
                 // Fallback: dalam development mode, tetap izinkan OTP dengan menampilkan kode
                 if (ENVIRONMENT === 'development') {
-                    $session->set([
-                        'pending_student_email' => $student['email'],
-                        'dev_otp_code'        => $otp['code'],
-                        'otp_email'           => $student['email'],
-                    ]);
+            $session->set([
+                'pending_student_email' => $student['email'],
+                'dev_otp_code'        => $otp['code'],
+                'otp_email'           => $student['email'],
+            ]);
 
-                    return redirect()->to('/auth/otp')
-                        ->with('warning', 'Gagal mengirim OTP ke email (mode development). Kode OTP: ' . $otp['code']);
+            return redirect()->to('/auth/otp?tid=' . $otp['id'])
+                ->with('warning', 'Gagal mengirim OTP ke email (mode development). Kode OTP: ' . $otp['code']);
                 }
 
                 $this->generateCaptcha();
@@ -120,7 +144,12 @@ class Auth extends BaseController
             $session->set('pending_student_email', $student['email']);
             $session->set('otp_email', $student['email']);
 
-            return redirect()->to('/auth/otp')->with('info', 'OTP telah dikirim ke email Anda.');
+            // Sertakan OTP id sebagai token di URL supaya halaman OTP bersifat
+            // stateless: tahan terhadap refresh (session ID rotation) dan close
+            // browser (session cookie non-persistent). OTP di-DB expire dalam
+            // 5 menit — setelah itu token tidak berlaku lagi.
+            return redirect()->to('/auth/otp?tid=' . $otp['id'])
+                ->with('info', 'OTP telah dikirim ke email Anda.');
         }
 
         $lecturerModel = new LecturerModel();
@@ -140,16 +169,40 @@ class Auth extends BaseController
             'user_name' => $lecturer['nama'],
         ]);
 
+        (new AdService())->clearCurrentView();
+
         return redirect()->to('/lecturer/subjects')->with('success', 'Login dosen berhasil.');
     }
 
     public function otp()
     {
         $session = session();
-        $email   = $session->get('pending_student_email');
+        $email   = null;
+
+        // 1) Prioritas: token dari URL (?tid=N) — tahan terhadap session hilang
+        //    (refresh, close browser, multiple tab). Token = id OTP di DB, valid
+        //    hanya selama OTP belum dipakai (is_used=0) dan belum expire (5 menit).
+        $tid = (int) ($this->request->getGet('tid') ?? 0);
+        if ($tid > 0) {
+            $otpRow = (new OtpCodeModel())->find($tid);
+            if ($otpRow
+                && (int) $otpRow['is_used'] === 0
+                && strtotime($otpRow['expired_at']) >= time()
+            ) {
+                $email = $otpRow['email'];
+                // Sinkronkan ke session untuk request berikut tanpa token
+                $session->set('pending_student_email', $email);
+            }
+        }
+
+        // 2) Fallback ke session (untuk request biasa / setelah token tervalidasi)
+        if (! $email) {
+            $email = $session->get('pending_student_email');
+        }
 
         if (! $email) {
-            return redirect()->to('/auth')->with('error', 'Sesi OTP tidak ditemukan.');
+            return redirect()->to('/auth')
+                ->with('error', 'Sesi OTP tidak ditemukan. Silakan login kembali untuk membuat OTP baru.');
         }
 
         if ($this->request->getMethod() !== 'POST') {
@@ -191,6 +244,8 @@ class Auth extends BaseController
             'user_id'   => $student['email'],
             'user_name' => $student['nama'],
         ]);
+
+        (new AdService())->clearCurrentView();
 
         return redirect()->to('/student/dashboard')->with('success', 'Login mahasiswa berhasil.');
     }
@@ -405,7 +460,9 @@ class Auth extends BaseController
 
     public function logout()
     {
-        session()->destroy();
+        $session = session();
+        $session->remove(['logged_in', 'role', 'user_id', 'user_name', 'ad_anon_id']);
+        $session->setFlashdata('just_logged_out', true);
 
         return redirect()->to('/auth')->with('success', 'Logout berhasil.');
     }
@@ -418,7 +475,7 @@ class Auth extends BaseController
         $otpModel->insert([
             'email'      => $email,
             'otp_code'   => $otpCode,
-            'expired_at' => date('Y-m-d H:i:s', strtotime('+5 minutes')),
+            'expired_at' => date('Y-m-d H:i:s', strtotime('+10 minutes')),
             'is_used'    => 0,
         ]);
 
