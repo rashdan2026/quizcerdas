@@ -11,7 +11,7 @@ $title  = $ad['title'];
 ?>
 <div class="modal fade" id="mediaModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content" style="border-radius:16px;overflow:hidden;border:none;box-shadow:0 25px 60px rgba(0,0,0,.4);">
+        <div class="modal-content" style="position:relative;border-radius:16px;overflow:hidden;border:none;box-shadow:0 25px 60px rgba(0,0,0,.4);">
             <a href="<?= base_url('ad/click/' . $ad['id']) ?>" target="_blank" rel="noopener nofollow" id="mediaLink" style="display:block;width:fit-content;max-width:100%;margin:0 auto;position:relative;background:#000;line-height:0;">
                 <img src="<?= esc($imgUrl) ?>" alt="<?= esc($title) ?>" style="display:block;width:auto;height:auto;max-width:min(500px,90vw);max-height:75vh;object-fit:contain;"
                      onerror="this.style.display='none';var f=document.getElementById('mediaFallback');if(f)f.style.display='flex';">
@@ -20,8 +20,8 @@ $title  = $ad['title'];
                     <strong style="font-size:1.05rem;"><?= esc($title) ?></strong>
                     <span style="font-size:.8rem;color:#CBD5E1;">Klik area ini untuk membuka tautan</span>
                 </span>
-                <span style="position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,.55);color:#fff;font-size:.65rem;padding:2px 6px;border-radius:4px;letter-spacing:.3px;">Iklan</span>
             </a>
+            <span style="position:absolute;bottom:14px;right:14px;background:rgba(0,0,0,.6);color:#fff;font-size:.82rem;padding:5px 14px;border-radius:6px;letter-spacing:.4px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);box-shadow:0 2px 10px rgba(0,0,0,.35);">Iklan</span>
             <button type="button" id="mediaCloseBtn" aria-label="Tutup iklan"
                 style="position:absolute;top:10px;right:10px;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;padding:0;background:rgba(0,0,0,0.35);color:#fff;border:1.5px solid rgba(255,255,255,0.55);box-shadow:0 2px 6px rgba(0,0,0,0.3);opacity:0.65;cursor:pointer;pointer-events:none;z-index:10;transition:opacity .25s ease, transform .15s ease, background .25s ease, color .25s ease, width .25s ease, height .25s ease, border-color .25s ease, box-shadow .25s ease;">
                 <i class="bi bi-x-lg" style="font-size:1.1rem;color:#fff;line-height:1;"></i>

@@ -15,6 +15,7 @@ class StudentModel extends Model
         'npm',
         'email',
         'nama',
+        'jenkel',
         'password',
         'passwd',
         'kelas',

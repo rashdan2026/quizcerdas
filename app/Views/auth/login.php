@@ -73,6 +73,6 @@ function togglePwd() {
 }
 </script>
 <?php if (! empty($loginAd)): ?>
-<?= view('partials/ad_modal', ['ad' => $loginAd, 'lockSeconds' => $adLockSec, 'placement' => 'login']) ?>
+<?= /* v5.8.5: iklan tidak ditampilkan di halaman login (pre-auth & post-logout). */ '' ?>
 <?php endif; ?>
 <?= $this->endSection() ?>

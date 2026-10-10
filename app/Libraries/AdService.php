@@ -82,14 +82,23 @@ class AdService
         return 'anon:' . $session->get('ad_anon_id');
     }
 
-    public function pickAdForDisplay(string $placement): ?array
+    /**
+     * Pilih iklan untuk ditampilkan. Mengikuti aturan:
+     *  1. Anti-refresh-during-countdown (kembalikan iklan SAMA tanpa impression baru)
+     *  2. Hanya iklan aktif
+     *  3. Filter target_gender sesuai user (null → hanya 'Both')
+     *  4. Exclude iklan yang sudah dilihat user hari ini (anti-repeat)
+     *  5. Exclude ad_last_shown (rotasi)
+     *  6. Daily quota
+     *  7. Global frequency gate (detik % N == 0)
+     *  8. Weighted-random berdasar priority_score (fallback random biasa bila semua 0)
+     *  9. Record impression + decrementPriority
+     */
+    public function pickAdForDisplay(string $placement, ?string $userGender = null): ?array
     {
         $session = session();
 
-        // 1) Anti-refresh-during-countdown: jika user masih dalam window
-        //    "active view" (lock duration + buffer), kembalikan iklan yang
-        //    sama TANPA menambah impression baru. Ini mencegah abuse refresh
-        //    untuk skip iklan atau meng-inflate hitungan harian.
+        // 1) Anti-refresh-during-countdown: iklan SAMA tanpa impression baru
         $currentView = $session->get('current_ad_view');
         $window      = $this->getLockSeconds() + self::CURRENT_VIEW_BUFFER;
         if (is_array($currentView)
@@ -99,18 +108,40 @@ class AdService
         ) {
             $cachedAd = $this->adModel->find((int) $currentView['ad_id']);
             if ($cachedAd && (int) $cachedAd['is_active'] === 1) {
-                return $cachedAd; // SAME ad, no new impression
+                return $cachedAd;
             }
         }
 
-        // 2) Normal flow: cek kandidat iklan + batas harian
+        // 2) Kandidat aktif
         $ads = $this->adModel->getActive($placement);
         if (empty($ads)) {
             return null;
         }
 
-        // Exclude iklan yang baru saja ditampilkan supaya tidak berturut-turut
-        // muncul iklan yang sama (rotasi lebih natural saat navigasi halaman).
+        // 3) Filter target_gender
+        $allowedGenders = AdModel::allowedGendersForUser($userGender);
+        $ads = array_values(array_filter(
+            $ads,
+            fn($a) => in_array((string) ($a['target_gender'] ?? AdModel::GENDER_BOTH), $allowedGenders, true)
+        ));
+        if (empty($ads)) {
+            return null;
+        }
+
+        // 4) Anti-repeat harian: exclude iklan yang sudah dilihat user hari ini
+        $identifier = $this->getUserIdentifier();
+        $seenIds    = $this->impressionModel->seenTodayAdIds($identifier);
+        if (! empty($seenIds)) {
+            $ads = array_values(array_filter(
+                $ads,
+                fn($a) => ! in_array((int) $a['id'], $seenIds, true)
+            ));
+            if (empty($ads)) {
+                return null;
+            }
+        }
+
+        // 5) Exclude ad_last_shown supaya tidak berturut-turut
         $lastShown = (int) $session->get(self::SESSION_LAST_SHOWN);
         if ($lastShown > 0 && count($ads) > 1) {
             $ads = array_values(array_filter(
@@ -119,29 +150,35 @@ class AdService
             ));
         }
 
-        $identifier = $this->getUserIdentifier();
-        $todayCount = $this->impressionModel->countToday($identifier, $placement);
+        // 6) Daily quota user — GLOBAL per user per hari (semua placement
+        //    digabung: dashboard + pdf), sesuai deskripsi setting admin
+        //    "Maks tampil: Nx per hari per user". (v5.8.5: sebelumnya
+        //    dihitung per-placement sehingga kuota dashboard tidak pernah
+        //    terpicu karena bug ENUM placement kosong.)
+        $todayCount = $this->impressionModel->countTodayAllPlacements($identifier);
         if ($todayCount >= $this->getDailyMax()) {
             return null;
         }
 
-        // Frekuensi tampil dikontrol global oleh default_ad_setting_number.
-        // Per-ad setting_number TIDAK memblokir (hanya disimpan sebagai metadata)
-        // supaya semua iklan aktif punya kesempatan tampil yang merata.
+        // 7) Global frequency gate
         $defaultSn = $this->getDefaultSettingNumber();
         if (! $this->shouldShowNow($defaultSn)) {
             return null;
         }
 
-        // Acak urutan iklan lalu pilih satu — menjamin variasi.
-        shuffle($ads);
-        $ad = $ads[0];
+        // 8) Weighted-random (fallback random biasa bila semua score 0)
+        $ad = $this->adModel->pickWeighted($ads);
+        if (! $ad) {
+            return null;
+        }
 
+        // 9) Record impression + decrement priority (atomic per-row)
         $this->impressionModel->recordView((int) $ad['id'], $identifier, $placement);
+        $this->adModel->decrementPriority((int) $ad['id']);
 
-        // 3) Simpan ke session untuk anti-refresh & rotasi
+        // Simpan ke session untuk anti-refresh & rotasi
         $session->set('current_ad_view', [
-            'ad_id'    => (int) $ad['id'],
+            'ad_id'     => (int) $ad['id'],
             'viewed_at' => time(),
         ]);
         $session->set(self::SESSION_LAST_SHOWN, (int) $ad['id']);

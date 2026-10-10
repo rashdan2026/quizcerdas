@@ -212,7 +212,9 @@ class Scan extends BaseController
         }
 
         $adService = new AdService();
-        $ad        = $adService->pickAdForDisplay('pdf');
+        $studentModel = new \App\Models\StudentModel();
+        $studentRow   = $studentModel->find($email);
+        $ad           = $adService->pickAdForDisplay('pdf', $studentRow['jenkel'] ?? null);
 
         $linkModel = new \App\Models\MeetingLinkModel();
         $links     = $linkModel->getByMeeting($meetingId);

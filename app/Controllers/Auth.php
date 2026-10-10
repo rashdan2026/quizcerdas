@@ -31,10 +31,18 @@ class Auth extends BaseController
 
         $captcha = $this->generateCaptcha();
 
+        // v5.8.5: iklan TIDAK ditampilkan di halaman login (pre-auth & post-logout).
+        // Halaman ini dikunjungi saat: (a) sebelum login, (b) SETELAH LOGOUT —
+        // dan iklan yang muncul di sini dikeluhkan muncul di "event logout".
+        // Iklan HANYA tampil setelah login berhasil:
+        //  - Student\Dashboard::index (placement 'dashboard', setiap load dashboard)
+        //  - Student\Scan::detail      (placement 'pdf', saat klik "Detail" pertemuan)
+        // dengan aturan per-user dari AdService: kuota harian (daily_ad_max_display),
+        // frequency gate (detik % default_ad_setting_number == 0), dan anti-repeat harian.
         $data = [
             'captcha'      => $captcha,
-            'loginAd'      => $this->adService->pickAdForDisplay('login'),
-            'adLockSec'    => $this->adService->getLockSeconds(),
+            'loginAd'      => null,
+            'adLockSec'    => 0,
         ];
 
         return view('auth/login', $data);

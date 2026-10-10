@@ -205,6 +205,7 @@
         .bg-danger-soft { background: rgba(220,38,38,.22); color: #FCA5A5; border: 1px solid rgba(220,38,38,.3); }
         .bg-secondary-soft { background: rgba(156,163,175,.22); color: #D1D5DB; border: 1px solid rgba(156,163,175,.3); }
         .bg-primary-soft { background: rgba(59,130,246,.22); color: #93C5FD; border: 1px solid rgba(59,130,246,.3); }
+        .bg-info-soft { background: rgba(14,165,233,.22); color: #7DD3FC; border: 1px solid rgba(14,165,233,.3); }
 
         .stat-card { background: var(--admin-panel); border: 1px solid var(--admin-border); border-radius: 12px; padding: 18px; display: flex; align-items: center; gap: 14px; }
         .stat-card .icon { width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0; }
@@ -254,8 +255,16 @@
     <a class="nav-link <?= str_starts_with(uri_string(), 'admin/students') ? 'active' : '' ?>" href="<?= base_url('/admin/students') ?>">
         <i class="bi bi-mortarboard"></i> Mahasiswa
     </a>
+    <a class="nav-link <?= str_starts_with(uri_string(), 'admin/impressions') ? 'active' : '' ?>" href="<?= base_url('/admin/impressions') ?>">
+        <i class="bi bi-bar-chart-line"></i> Kuota Iklan
+    </a>
     <a class="nav-link <?= str_starts_with(uri_string(), 'admin/settings') ? 'active' : '' ?>" href="<?= base_url('/admin/settings') ?>">
         <i class="bi bi-sliders"></i> Pengaturan
+    </a>
+
+    <div class="nav-section">Akun</div>
+    <a class="nav-link <?= str_starts_with(uri_string(), 'admin/change-password') ? 'active' : '' ?>" href="<?= base_url('/admin/change-password') ?>">
+        <i class="bi bi-key"></i> Ganti Password
     </a>
 
     <div class="user-box">

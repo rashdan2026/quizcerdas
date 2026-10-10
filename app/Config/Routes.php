@@ -59,8 +59,14 @@ $routes->group('admin', static function ($routes) {
         $routes->post('students/(:any)/reset-password', 'Admin\Student::resetPassword/$1');
         $routes->post('students/reset-all-otp-counters', 'Admin\Student::resetAllOtpCounters');
 
+        // v5.8.6: Kuota Iklan Mahasiswa — halaman admin impressions per mahasiswa
+        $routes->get('impressions', 'Admin\Impression::index');
+        $routes->post('impressions/reset', 'Admin\Impression::reset');
+
         $routes->get('settings', 'Admin\Settings::index');
         $routes->post('settings/save', 'Admin\Settings::save');
+
+        $routes->match(['get', 'post'], 'change-password', 'Admin\Dashboard::changePassword');
     });
 });
 
@@ -89,6 +95,7 @@ $routes->group('lecturer', ['filter' => 'authguard:lecturer'], static function (
 $routes->group('student', ['filter' => 'authguard:student'], static function ($routes) {
     $routes->get('dashboard', 'Student\Dashboard::index');
     $routes->match(['get', 'post'], 'dashboard/edit-profile', 'Student\Dashboard::editProfile');
+    $routes->post('dashboard/update-profile', 'Student\Dashboard::updateProfile');
     $routes->match(['get', 'post'], 'scan', 'Student\Scan::index');
     $routes->post('scan/submit', 'Student\Scan::submit');
     $routes->get('detail/(:num)', 'Student\Scan::detail/$1');

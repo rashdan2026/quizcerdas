@@ -148,4 +148,154 @@
 <?= $this->endSection() ?>
 
 <?= $this->section('scripts') ?>
+<?php if (! empty($dashboardAd)): ?>
+<?= view('partials/ad_modal', ['ad' => $dashboardAd, 'lockSeconds' => $adLockSec, 'placement' => 'dashboard']) ?>
+<?php endif; ?>
+
+<?php if (! empty($needsProfileComplete)): ?>
+<?= view('partials/profile_modal', ['student' => $student]) ?>
+<script>
+(function () {
+    var adModalEl     = document.getElementById('mediaModal');
+    var profileModalEl = document.getElementById('profileCompleteModal');
+    if (!profileModalEl) { return; }
+
+    function showProfileModal() {
+        var m = bootstrap.Modal.getOrCreateInstance(profileModalEl);
+        m.show();
+    }
+
+    if (adModalEl) {
+        adModalEl.addEventListener('hidden.bs.modal', function () {
+            showProfileModal();
+        }, { once: true });
+    } else {
+        document.addEventListener('DOMContentLoaded', function () {
+            showProfileModal();
+        });
+    }
+
+    var form        = document.getElementById('profileCompleteForm');
+    var npmEl       = document.getElementById('pcNpm');
+    var namaEl      = document.getElementById('pcNama');
+    var kelasEl     = document.getElementById('pcKelas');
+    var jenkelEl    = document.getElementById('pcJenkel');
+    var whatsappEl  = document.getElementById('pcWhatsapp');
+    var errBox      = document.getElementById('pcError');
+    var submitBtn   = document.getElementById('pcSubmitBtn');
+
+    function showError(msg) {
+        if (!errBox) { return; }
+        errBox.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-1"></i>' + msg;
+        errBox.style.display = 'flex';
+    }
+
+    function clearError() {
+        if (!errBox) { return; }
+        errBox.style.display = 'none';
+        errBox.innerHTML = '';
+    }
+
+    if (kelasEl) {
+        kelasEl.addEventListener('input', function () {
+            var pos = kelasEl.selectionStart;
+            kelasEl.value = kelasEl.value.toUpperCase().replace(/[^A-Z]/g, '');
+            kelasEl.setSelectionRange(pos, pos);
+            clearError();
+        });
+    }
+    if (npmEl) {
+        npmEl.addEventListener('input', function () {
+            var pos = npmEl.selectionStart;
+            npmEl.value = npmEl.value.replace(/\D/g, '').slice(0, 9);
+            npmEl.setSelectionRange(pos, pos);
+            clearError();
+        });
+    }
+    if (whatsappEl) {
+        whatsappEl.addEventListener('input', function () {
+            var pos = whatsappEl.selectionStart;
+            whatsappEl.value = whatsappEl.value.replace(/\D/g, '').slice(0, 15);
+            whatsappEl.setSelectionRange(pos, pos);
+            clearError();
+        });
+    }
+    if (jenkelEl) {
+        jenkelEl.addEventListener('change', clearError);
+    }
+    if (namaEl) {
+        namaEl.addEventListener('input', clearError);
+    }
+
+    if (form) {
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            clearError();
+
+            var npm       = (npmEl.value      || '').trim();
+            var nama      = (namaEl.value     || '').trim();
+            var kelas     = (kelasEl.value    || '').trim();
+            var jenkel    = jenkelEl.value;
+            var whatsapp  = (whatsappEl.value || '').trim();
+
+            if (!/^\d{9}$/.test(npm)) {
+                showError('NPM wajib diisi 9 digit angka.');
+                npmEl.focus();
+                return;
+            }
+            if (nama.length < 3 || nama.length > 100) {
+                showError('Nama wajib diisi 3-100 karakter.');
+                namaEl.focus();
+                return;
+            }
+            if (!/^[A-Z]+$/.test(kelas)) {
+                showError('Kelas wajib diisi dengan huruf besar A-Z saja, tanpa angka atau simbol.');
+                kelasEl.focus();
+                return;
+            }
+            if (jenkel !== 'Laki-Laki' && jenkel !== 'Perempuan') {
+                showError('Jenis kelamin wajib dipilih.');
+                jenkelEl.focus();
+                return;
+            }
+            if (whatsapp === '' || whatsapp.length > 15) {
+                showError('No. WhatsApp wajib diisi, maksimal 15 digit.');
+                whatsappEl.focus();
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Menyimpan...';
+
+            var fd = new FormData(form);
+
+            fetch('<?= base_url('/student/dashboard/update-profile') ?>', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': (fd.get('<?= csrf_token() ?>') || '')
+                },
+                body: fd
+            }).then(function (r) {
+                return r.json().then(function (j) { return { status: r.status, body: j }; });
+            }).then(function (resp) {
+                if (resp.status === 200 && resp.body && resp.body.ok) {
+                    var m = bootstrap.Modal.getInstance(profileModalEl);
+                    if (m) { m.hide(); }
+                    location.reload();
+                } else {
+                    showError((resp.body && resp.body.message) ? resp.body.message : 'Gagal menyimpan profil.');
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Simpan & Lanjutkan';
+                }
+            }).catch(function () {
+                showError('Terjadi kesalahan jaringan. Silakan coba lagi.');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Simpan & Lanjutkan';
+            });
+        });
+    }
+})();
+</script>
+<?php endif; ?>
 <?= $this->endSection() ?>

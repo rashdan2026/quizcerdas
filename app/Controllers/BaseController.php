@@ -32,6 +32,14 @@ abstract class BaseController extends Controller
      */
     public function initController(RequestInterface $request, ResponseInterface $response, LoggerInterface $logger)
     {
+        // Pastikan zona waktu Indonesia/Jakarta (WIB) tersinkronisasi di
+        // setiap request, sehingga seluruh timestamp (last_login, attendance,
+        // OTP expiry, dll) konsisten dengan waktu lokal kampus.
+        // Config\App::$appTimezone sudah di-set ke 'Asia/Jakarta' — baris
+        // ini adalah defensive measure agar tetap konsisten walau .env
+        // belum ter-load atau ada override tak terduga dari runtime.
+        date_default_timezone_set('Asia/Jakarta');
+
         // Load here all helpers you want to be available in your controllers that extend BaseController.
         // Caution: Do not put the this below the parent::initController() call below.
         // $this->helpers = ['form', 'url'];

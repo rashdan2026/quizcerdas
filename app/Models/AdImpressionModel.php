@@ -27,7 +27,24 @@ class AdImpressionModel extends Model
         $row = $this->selectSum('view_count', 'total')
             ->where('user_identifier', $userIdentifier)
             ->where('view_date', date('Y-m-d'))
-            ->whereIn('placement', $placement === 'all' ? ['login','pdf','all'] : [$placement, 'all'])
+            ->whereIn('placement', $placement === 'all' ? ['login','pdf','dashboard','all'] : [$placement, 'all'])
+            ->first();
+
+        return (int) ($row['total'] ?? 0);
+    }
+
+    /**
+     * Hitung TOTAL impresi user hari ini dari SEMUA placement (login + pdf +
+     * dashboard) — dipakai untuk kuota harian global per-user, sesuai
+     * deskripsi setting admin "Maks tampil: Nx per hari per user".
+     * (v5.8.5: sebelumnya kuota dihitung per-placement sehingga user bisa
+     * melihat Nx iklan dashboard + Nx iklan pdf = 2N total per hari.)
+     */
+    public function countTodayAllPlacements(string $userIdentifier): int
+    {
+        $row = $this->selectSum('view_count', 'total')
+            ->where('user_identifier', $userIdentifier)
+            ->where('view_date', date('Y-m-d'))
             ->first();
 
         return (int) ($row['total'] ?? 0);
@@ -55,5 +72,27 @@ class AdImpressionModel extends Model
                 'view_count'      => 1,
             ]);
         }
+    }
+
+    /**
+     * Kembalikan daftar ad_id yang SUDAH dilihat user tertentu pada hari ini
+     * (semua placement). Dipakai untuk anti-repeat harian.
+     *
+     * @return int[]
+     */
+    public function seenTodayAdIds(string $userIdentifier): array
+    {
+        $rows = $this->db->table('ad_impressions')
+            ->select('ad_id')
+            ->where('user_identifier', $userIdentifier)
+            ->where('view_date', date('Y-m-d'))
+            ->get()
+            ->getResultArray();
+
+        $ids = [];
+        foreach ($rows as $r) {
+            $ids[] = (int) $r['ad_id'];
+        }
+        return $ids;
     }
 }

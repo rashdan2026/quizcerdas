@@ -30,6 +30,31 @@ $isEdit = ! empty($ad);
                         <input class="form-check-input" type="checkbox" name="is_active" value="1" id="isActive" <?= old('is_active', $ad['is_active'] ?? 1) ? 'checked' : '' ?>>
                         <label class="form-check-label" for="isActive">Aktif</label>
                     </div>
+                    <div class="row g-3 mt-2">
+                        <div class="col-md-6">
+                            <label class="form-label">Target Gender</label>
+                            <select name="target_gender" class="form-select">
+                                <?php
+                                $currentGender = old('target_gender', $ad['target_gender'] ?? 'Both');
+                                $genderOptions = [
+                                    'Both'      => 'Semua (Both)',
+                                    'Laki-Laki' => 'Laki-Laki saja',
+                                    'Perempuan' => 'Perempuan saja',
+                                ];
+                                foreach ($genderOptions as $val => $label):
+                                ?>
+                                    <option value="<?= esc($val) ?>" <?= $currentGender === $val ? 'selected' : '' ?>><?= esc($label) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-text">User tanpa gender (belum lengkap profil) hanya melihat iklan <code>Both</code>.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Priority Score</label>
+                            <input type="number" name="priority_score" class="form-control" min="0" step="1"
+                                   value="<?= esc(old('priority_score', $ad['priority_score'] ?? 0)) ?>">
+                            <div class="form-text">Bobot untuk weighted-random. Berkurang 1 setiap tampil. Jika semua kandidat score 0 → random biasa.</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
