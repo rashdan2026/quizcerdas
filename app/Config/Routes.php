@@ -67,6 +67,14 @@ $routes->group('admin', static function ($routes) {
         $routes->post('settings/save', 'Admin\Settings::save');
 
         $routes->match(['get', 'post'], 'change-password', 'Admin\Dashboard::changePassword');
+
+        // ===================== Modul Quiz (baru) =====================
+        $routes->get('quiz-ai', 'Admin\QuizAI::index');
+        $routes->post('quiz-ai/providers/save', 'Admin\QuizAI::save');
+        $routes->post('quiz-ai/providers/(:num)/toggle', 'Admin\QuizAI::toggle/$1');
+        $routes->post('quiz-ai/providers/(:num)/test', 'Admin\QuizAI::test/$1');
+        $routes->post('quiz-ai/providers/reorder', 'Admin\QuizAI::reorder');
+        $routes->get('quiz-ai/logs', 'Admin\QuizAI::logs');
     });
 });
 
@@ -90,6 +98,27 @@ $routes->group('lecturer', ['filter' => 'authguard:lecturer'], static function (
     $routes->get('report', 'Lecturer\Report::index');
     $routes->get('report/detail/(:num)', 'Lecturer\Report::detail/$1');
     $routes->post('report/add', 'Lecturer\Report::addManual');
+
+    // ===================== Modul Quiz (baru) =====================
+    $routes->get('quiz', 'Lecturer\Quiz::index');
+    $routes->get('quiz/nilai', 'Lecturer\Quiz::nilaiIndex');
+    $routes->match(['get', 'post'], 'quiz/create', 'Lecturer\Quiz::create');
+    $routes->get('quiz/(:num)', 'Lecturer\Quiz::show/$1');
+    $routes->get('quiz/(:num)/nilai', 'Lecturer\Quiz::nilai/$1');
+    $routes->get('quiz/(:num)/nilai/export', 'Lecturer\Quiz::exportNilai/$1');
+    $routes->get('quiz/(:num)/analytics', 'Lecturer\Quiz::analytics/$1');
+    $routes->get('quiz/(:num)/settings', 'Lecturer\Quiz::settingsForm/$1');
+    $routes->post('quiz/(:num)/settings', 'Lecturer\Quiz::settings/$1');
+    $routes->post('quiz/(:num)/regenerate-code', 'Lecturer\Quiz::regenerateCode/$1');
+    $routes->get('quiz/(:num)/codes', 'Lecturer\Quiz::codeHistory/$1');
+    $routes->post('quiz/(:num)/delete', 'Lecturer\Quiz::delete/$1');
+    $routes->post('quiz/(:num)/questions/manual', 'Lecturer\QuizQuestion::addManual/$1');
+    $routes->post('quiz/questions/(:num)/update', 'Lecturer\QuizQuestion::update/$1');
+    $routes->post('quiz/questions/(:num)/delete', 'Lecturer\QuizQuestion::delete/$1');
+    $routes->post('quiz/(:num)/generate', 'Lecturer\QuizGenerate::generate/$1');
+    $routes->get('quiz/(:num)/generate-status', 'Lecturer\QuizGenerate::generateStatus/$1');
+    $routes->get('quiz/batches/(:num)/status', 'Lecturer\QuizGenerate::batchStatus/$1');
+    $routes->get('quiz/(:num)/review', 'Lecturer\Quiz::show/$1');
 });
 
 $routes->group('student', ['filter' => 'authguard:student'], static function ($routes) {
@@ -105,4 +134,14 @@ $routes->group('student', ['filter' => 'authguard:student'], static function ($r
     $routes->get('pdf/(:num)', 'Student\PdfViewer::index/$1');
     $routes->get('pdf/file/(:num)', 'Student\PdfFile::view/$1');
     $routes->get('meeting/(:num)/video', 'Student\Scan::video/$1');
+
+    // ===================== Modul Quiz (baru) =====================
+    $routes->get('quiz', 'Student\Quiz::index');
+    $routes->post('quiz/info', 'Student\Quiz::info');
+    $routes->get('quiz/(:num)', 'Student\Quiz::info/$1');
+    $routes->post('quiz/(:num)/start', 'Student\Quiz::start/$1');
+    $routes->get('quiz/attempt/(:num)', 'Student\Quiz::attempt/$1');
+    $routes->post('quiz/attempt/(:num)/answer', 'Student\Quiz::answer/$1');
+    $routes->post('quiz/attempt/(:num)/submit', 'Student\Quiz::submit/$1');
+    $routes->get('quiz/attempt/(:num)/result', 'Student\Quiz::result/$1');
 });

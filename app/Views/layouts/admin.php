@@ -261,6 +261,9 @@
     <a class="nav-link <?= str_starts_with(uri_string(), 'admin/settings') ? 'active' : '' ?>" href="<?= base_url('/admin/settings') ?>">
         <i class="bi bi-sliders"></i> Pengaturan
     </a>
+    <a class="nav-link <?= str_starts_with(uri_string(), 'admin/quiz-ai') ? 'active' : '' ?>" href="<?= base_url('/admin/quiz-ai') ?>">
+        <i class="bi bi-cpu"></i> Pengaturan AI
+    </a>
 
     <div class="nav-section">Akun</div>
     <a class="nav-link <?= str_starts_with(uri_string(), 'admin/change-password') ? 'active' : '' ?>" href="<?= base_url('/admin/change-password') ?>">

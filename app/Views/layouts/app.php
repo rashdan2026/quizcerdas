@@ -90,11 +90,13 @@
                 <li class="nav-item"><a class="nav-link" href="<?= base_url('/lecturer/meetings') ?>"><i class="bi bi-collection me-1"></i>Pertemuan</a></li>
                 <li class="nav-item"><a class="nav-link" href="<?= base_url('/lecturer/subjects') ?>"><i class="bi bi-book me-1"></i>Matakuliah</a></li>
                 <li class="nav-item"><a class="nav-link" href="<?= base_url('/lecturer/report') ?>"><i class="bi bi-bar-chart me-1"></i>Rekap</a></li>
+                <li class="nav-item"><a class="nav-link" href="<?= base_url('/lecturer/quiz') ?>"><i class="bi bi-lightbulb me-1"></i>Kuis</a></li>
             </ul>
             <?php elseif (session('role') === 'student'): ?>
             <ul class="navbar-nav me-auto gap-1 mt-2 mt-lg-0">
                 <li class="nav-item"><a class="nav-link" href="<?= base_url('/student/dashboard') ?>"><i class="bi bi-house me-1"></i>Dashboard</a></li>
                 <li class="nav-item"><a class="nav-link" href="<?= base_url('/student/scan') ?>"><i class="bi bi-qr-code-scan me-1"></i>Scan Absensi</a></li>
+                <li class="nav-item"><a class="nav-link" href="<?= base_url('/student/quiz') ?>"><i class="bi bi-lightbulb me-1"></i>Kuis</a></li>
             </ul>
             <?php endif; ?>
             <div class="d-flex align-items-center gap-2 mt-2 mt-lg-0">
