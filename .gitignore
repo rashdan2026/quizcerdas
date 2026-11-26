@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!.env.production.example
 
 # IDE and Editor files
 .vscode/
@@ -23,12 +24,19 @@ tests/
 phpunit.xml.dist
 preload.php
 server.php
-spark
 test_*.php
 *_test.php
 *_tester.php
 debug*.php
 update-pass.php
+
+# Diagnostik/admin browser JANGAN ikut deployment (akses publik di public/)
+public/check.php
+public/simple-check.php
+public/test-report.php
+public/run-migrations.php
+public/update-lecturer-pass.php
+new_entry.txt
 
 # Temporary and Debug scripts
 update_*.php
@@ -60,6 +68,12 @@ writable/debugbar/*
 !writable/debugbar/.htaccess
 writable/uploads/*
 !writable/uploads/.htaccess
+writable/quiz_tmp/*
+!writable/quiz_tmp/.htaccess
+writable/exports/*
+writable/loadtest-results/*
+# Kunci enkripsi API AI — dibuat otomatis per server, JANGAN masuk git.
+writable/quiz_secret.key
 
 # Backup files
 *.bak

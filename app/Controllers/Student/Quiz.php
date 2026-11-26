@@ -275,9 +275,10 @@ class Quiz extends BaseController
             return $this->response->setJSON($res);
         }
 
-        // Cek apakah masih ada soal berikutnya; kalau habis -> finalisasi otomatis.
-        $state = $service->progressState($attempt);
-        if ($state['current'] === null) {
+        // Soal terakhir terjawab -> finalisasi otomatis (status selesai
+        // dilaporkan service dari perhitungan progres yang sama; tidak ada
+        // perhitungan ulang progres di sini).
+        if (! empty($res['finished'])) {
             $service->finalize($attempt, 'submitted');
 
             return $this->response->setJSON(['ok' => true, 'finished' => true, 'redirect' => base_url('/student/quiz/attempt/' . $attemptId . '/result')]);

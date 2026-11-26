@@ -262,7 +262,7 @@ class QuizGenerate extends BaseController
                 'ok' => false, 'error' => 'scan_' . $scan['status'],
                 'message' => $scan['status'] === 'infected'
                     ? 'File ditolak karena gagal pemeriksaan keamanan.'
-                    : 'File ditolak karena keamanannya tidak dapat dipastikan (pemindai tidak tersedia/gagal). Hubungi administrator.',
+                    : 'File ditolak karena pemindai keamanan tidak tersedia di server ini. Administrator dapat mengatur quiz.malwarePolicy = relaxed pada .env atau memasang ClamAV/Windows Defender.',
             ];
         }
 

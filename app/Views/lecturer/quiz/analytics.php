@@ -18,7 +18,7 @@
         <div class="small mt-1">Mudah <?= (int) $stats['easy'] ?> &middot; Sedang <?= (int) $stats['medium'] ?> &middot; Sulit <?= (int) $stats['hard'] ?></div>
     </div></div></div>
     <div class="col-md-3"><div class="card stat-card"><div class="card-body">
-        <div class="text-muted small">Peserta</div><div class="fs-4 fw-bold"><?= count($attempts) ?></div>
+        <div class="text-muted small">Peserta</div><div class="fs-4 fw-bold"><?= (int) $attemptCount ?></div>
     </div></div></div>
     <div class="col-md-3"><div class="card stat-card"><div class="card-body">
         <div class="text-muted small">Rata-rata</div>

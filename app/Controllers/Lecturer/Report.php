@@ -34,12 +34,12 @@ class Report extends BaseController
                 ->get()
                 ->getResultArray();
 
-            // Daftar mahasiswa aktif (untuk form tambah manual)
-            $students = (new StudentModel())->orderBy('email', 'ASC')->findAll();
+            // (Optimasi) Daftar seluruh mahasiswa tidak lagi dimuat: view rekap
+            // memakai input email biasa, bukan dropdown; query SELECT seluruh
+            // tabel students (425+ baris termasuk hash password) mubazir.
 
             return view('lecturer/report', [
                 'meetings' => $meetings ?? [],
-                'students' => $students ?? [],
             ]);
         } catch (\Exception $e) {
             log_message('error', 'Report index error: ' . $e->getMessage());

@@ -92,4 +92,67 @@ class QuizQuestionModel extends Model
 
         return $stats;
     }
+
+    /**
+     * Jumlah soal aktif untuk BANYAK kuis sekaligus (satu query GROUP BY,
+     * menggantikan query COUNT per kuis di dashboard dosen): [quiz_id => int].
+     */
+    public function activeCountsForQuizzes(array $quizIds): array
+    {
+        if ($quizIds === []) {
+            return [];
+        }
+
+        $rows = $this->db->table('quiz_questions')
+            ->select('quiz_id, COUNT(*) AS total')
+            ->whereIn('quiz_id', $quizIds)
+            ->where('is_active', 1)
+            ->groupBy('quiz_id')
+            ->get()
+            ->getResultArray();
+
+        $out = [];
+        foreach ($rows as $r) {
+            $out[(int) $r['quiz_id']] = (int) $r['total'];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Statistik jawaban per soal untuk satu kuis dalam SATU query GROUP BY
+     * (menggantikan satu query per soal pada halaman analitik dosen).
+     * Filter via quiz_attempts.quiz_id memakai index (quiz_id, status).
+     *
+     * @return array<int, array{n:int, right:int, wrong:int, blank:int, rt_sum:int}>
+     */
+    public function answerStatsForQuiz(int $quizId): array
+    {
+        $rows = $this->db->table('quiz_attempt_answers a')
+            ->select("a.question_id,
+                COUNT(*) AS n,
+                SUM(CASE WHEN a.is_correct = 1 THEN 1 ELSE 0 END) AS right_count,
+                SUM(CASE WHEN a.is_correct = 0 AND a.selected_option IS NOT NULL AND a.selected_option <> 'E' THEN 1 ELSE 0 END) AS wrong_count,
+                SUM(CASE WHEN a.selected_option IS NULL OR a.selected_option = '' OR a.selected_option = 'E' THEN 1 ELSE 0 END) AS blank_count,
+                SUM(COALESCE(a.response_time_ms, 0)) AS rt_sum")
+            ->join('quiz_attempts t', 't.id = a.attempt_id')
+            ->where('t.quiz_id', $quizId)
+            ->whereIn('t.status', ['submitted', 'timeout'])
+            ->groupBy('a.question_id')
+            ->get()
+            ->getResultArray();
+
+        $out = [];
+        foreach ($rows as $r) {
+            $out[(int) $r['question_id']] = [
+                'n'     => (int) $r['n'],
+                'right' => (int) $r['right_count'],
+                'wrong' => (int) $r['wrong_count'],
+                'blank' => (int) $r['blank_count'],
+                'rt_sum' => (int) $r['rt_sum'],
+            ];
+        }
+
+        return $out;
+    }
 }

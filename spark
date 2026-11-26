@@ -1,0 +1,48 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use CodeIgniter\Boot;
+use Config\Paths;
+
+/**
+ * ---------------------------------------------------------------------
+ * Spark: CLI entry point CodeIgniter 4 (migrate, cron housekeeping, dll).
+ * Diperlukan di server production untuk menjalankan cron job:
+ *   php spark app:housekeeping
+ *   php spark quiz:cleanup-temp
+ * ---------------------------------------------------------------------
+ */
+
+$minPhpVersion = '8.2'; // If you update this, don't forget to update `public/index.php`.
+
+if (version_compare(PHP_VERSION, $minPhpVersion, '<')) {
+    $message = sprintf(
+        'Your PHP version must be %s or higher to run CodeIgniter. Current version: %s',
+        $minPhpVersion,
+        PHP_VERSION
+    );
+
+    exit($message . PHP_EOL);
+}
+
+define('SPARKED', true);
+
+// Path to the front controller (this file)
+define('FCPATH', __DIR__ . DIRECTORY_SEPARATOR);
+
+// Ensure the current directory is pointing to the front controller's directory
+if (getcwd() . DIRECTORY_SEPARATOR !== FCPATH) {
+    chdir(FCPATH);
+}
+
+// LOAD OUR PATHS CONFIG FILE
+require FCPATH . 'app/Config/Paths.php';
+
+$paths = new Paths();
+
+// LOAD THE FRAMEWORK BOOTSTRAP FILE
+require $paths->systemDirectory . '/Boot.php';
+
+exit(Boot::bootSpark($paths));

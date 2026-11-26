@@ -15,11 +15,25 @@ class AdImage extends BaseController
             return $this->response->setStatusCode(404);
         }
 
-        $bytes = filesize($path);
+        // Revalidasi kondisional: bila browser sudah punya versi terbaru,
+        // balas 304 tanpa membaca/mengirim isi file (hemat PHP worker & bandwidth).
+        $mTime  = (int) filemtime($path);
+        $clTime = $_SERVER['HTTP_IF_MODIFIED_SINCE'] ?? '';
+
+        if ($clTime !== '' && @strtotime($clTime) >= $mTime) {
+            return $this->response->setStatusCode(304)
+                ->setHeader('Cache-Control', 'public, max-age=86400')
+                ->setHeader('Last-Modified', gmdate('D, d M Y H:i:s', $mTime) . ' GMT');
+        }
+
         return $this->response
+            ->setStatusCode(200)
             ->setHeader('Content-Type', 'image/gif')
-            ->setHeader('Content-Length', (string) $bytes)
-            ->setHeader('Cache-Control', 'public, max-age=3600')
+            ->setHeader('Content-Length', (string) filesize($path))
+            // Nama file unik per upload (gfx_*), sehingga cache panjang aman:
+            // gambar baru selalu URL baru.
+            ->setHeader('Cache-Control', 'public, max-age=86400')
+            ->setHeader('Last-Modified', gmdate('D, d M Y H:i:s', $mTime) . ' GMT')
             ->setBody(file_get_contents($path));
     }
 }

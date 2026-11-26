@@ -29,11 +29,13 @@ class Quiz extends BaseController
     {
         $quizzes = $this->model->forLecturer($this->lid());
 
+        // Jumlah soal aktif untuk semua kuis dalam SATU query (bukan per kuis).
         $quizIds  = array_map(static fn ($q) => (int) $q['id'], $quizzes);
         $actives  = (new QuizAccessCodeModel())->activeForQuizzes($quizIds);
+        $questionCounts = (new QuizQuestionModel())->activeCountsForQuizzes($quizIds);
 
         foreach ($quizzes as &$q) {
-            $q['question_count'] = (new QuizQuestionModel())->where('quiz_id', $q['id'])->where('is_active', 1)->countAllResults();
+            $q['question_count'] = $questionCounts[(int) $q['id']] ?? 0;
             // Kode aktif dari tabel histori kode (bukan kode lama yang sudah dinonaktifkan).
             $q['access_code'] = $actives[(int) $q['id']]['code'] ?? $q['access_code'];
         }
@@ -348,14 +350,17 @@ class Quiz extends BaseController
     public function nilaiIndex()
     {
         $quizzes = $this->model->forLecturer($this->lid());
-        $attemptModel = new QuizAttemptModel();
 
+        // Statistik per kuis dengan query GROUP BY (2 query untuk seluruh
+        // daftar, bukan 2 query per kuis).
         $quizIds = array_map(static fn ($q) => (int) $q['id'], $quizzes);
         $actives = (new QuizAccessCodeModel())->activeForQuizzes($quizIds);
+        $questionCounts = (new QuizQuestionModel())->activeCountsForQuizzes($quizIds);
+        $gradedCounts   = (new QuizAttemptModel())->gradedCountsForQuizzes($quizIds);
 
         foreach ($quizzes as &$q) {
-            $q['question_count'] = (new QuizQuestionModel())->where('quiz_id', $q['id'])->where('is_active', 1)->countAllResults();
-            $q['graded_count']   = $attemptModel->where('quiz_id', $q['id'])->whereIn('status', ['submitted', 'timeout'])->countAllResults();
+            $q['question_count'] = $questionCounts[(int) $q['id']] ?? 0;
+            $q['graded_count']   = $gradedCounts[(int) $q['id']] ?? 0;
             $q['access_code']    = $actives[(int) $q['id']]['code'] ?? $q['access_code'];
         }
         unset($q);
@@ -431,70 +436,46 @@ class Quiz extends BaseController
     {
         $quiz = $this->ownedOrFail($id);
 
-        $db       = db_connect();
         $question = new QuizQuestionModel();
         $attemptM = new QuizAttemptModel();
 
         $questions = $question->forQuiz($id);
-        $attempts  = $attemptM->where('quiz_id', $id)->whereIn('status', ['submitted', 'timeout'])->findAll();
         $stats     = $question->difficultyStats($id);
 
-        $avgRaw = 0;
-        $avgPct = 0;
-        $scores = array_column($attempts, 'raw_score');
-        if ($scores !== []) {
-            $avgRaw = round(array_sum($scores) / count($scores), 2);
-            $avgPct = round(array_sum(array_column($attempts, 'percentage')) / count($attempts), 2);
-        }
+        // Rata-rata skor/peserta via agregat (tanpa memuat seluruh attempt).
+        $agg = $attemptM->aggregateForQuiz($id);
+        $avgRaw = round($agg['avg_raw'], 2);
+        $avgPct = round($agg['avg_pct'], 2);
 
-        // Analitik per soal: persentase benar / salah / kosong, waktu respons rata-rata
+        // Analitik per soal: statistik seluruh soal dalam SATU query GROUP BY
+        // (menggantikan satu query jawaban per soal).
+        $answerStats = $question->answerStatsForQuiz($id);
+
         $perQuestion = [];
         foreach ($questions as $q) {
-            $answers = $db->table('quiz_attempt_answers a')
-                ->select('a.is_correct, a.selected_option, a.response_time_ms')
-                ->join('quiz_attempts t', 't.id = a.attempt_id')
-                ->where('a.question_id', $q['id'])
-                ->whereIn('t.status', ['submitted', 'timeout'])
-                ->get()->getResultArray();
-
-            $n     = count($answers);
-            $right = 0;
-            $wrong = 0;
-            $blank = 0;
-            $rtSum = 0;
-            foreach ($answers as $a) {
-                if ($a['selected_option'] === null || $a['selected_option'] === '') {
-                    $blank++;
-                } elseif ($a['selected_option'] === 'E') {
-                    $blank++;
-                } elseif ((int) $a['is_correct'] === 1) {
-                    $right++;
-                } else {
-                    $wrong++;
-                }
-                $rtSum += (int) ($a['response_time_ms'] ?? 0);
-            }
+            $s  = $answerStats[(int) $q['id']] ?? null;
+            $n  = $s !== null ? $s['n'] : 0;
 
             $perQuestion[] = [
                 'question'   => $q,
                 'responses'  => $n,
-                'right'      => $right,
-                'wrong'      => $wrong,
-                'blank'      => $blank,
-                'right_pct'  => $n > 0 ? round($right / $n * 100, 1) : null,
-                'avg_rt_sec' => $n > 0 ? round($rtSum / $n / 1000, 1) : null,
+                'right'      => $s !== null ? $s['right'] : 0,
+                'wrong'      => $s !== null ? $s['wrong'] : 0,
+                'blank'      => $s !== null ? $s['blank'] : 0,
+                'right_pct'  => $n > 0 ? round(($s !== null ? $s['right'] : 0) / $n * 100, 1) : null,
+                'avg_rt_sec' => ($n > 0 && $s !== null) ? round($s['rt_sum'] / $n / 1000, 1) : null,
             ];
         }
 
         usort($perQuestion, static fn ($a, $b) => ($b['avg_rt_sec'] ?? -1) <=> ($a['avg_rt_sec'] ?? -1));
 
         return view('lecturer/quiz/analytics', [
-            'quiz'        => $quiz,
-            'stats'       => $stats,
-            'attempts'    => $attempts,
-            'avgRaw'      => $avgRaw,
-            'avgPct'      => $avgPct,
-            'perQuestion' => $perQuestion,
+            'quiz'         => $quiz,
+            'stats'        => $stats,
+            'attemptCount' => $agg['n'],
+            'avgRaw'       => $avgRaw,
+            'avgPct'       => $avgPct,
+            'perQuestion'  => $perQuestion,
         ]);
     }
 }

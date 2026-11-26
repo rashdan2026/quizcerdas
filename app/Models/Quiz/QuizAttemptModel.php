@@ -154,7 +154,49 @@ class QuizAttemptModel extends Model
     }
 
     /**
-     * Histori keikutsertaan mahasiswa: tiap baris adalah satu percobaan
+     * Jumlah attempt selesai (submitted/timeout) untuk BANYAK kuis sekaligus
+     * (satu query GROUP BY untuk dashboard dosen): [quiz_id => int].
+     */
+    public function gradedCountsForQuizzes(array $quizIds): array
+    {
+        if ($quizIds === []) {
+            return [];
+        }
+
+        $rows = $this->db->table('quiz_attempts')
+            ->select('quiz_id, COUNT(*) AS total')
+            ->whereIn('quiz_id', $quizIds)
+            ->whereIn('status', ['submitted', 'timeout'])
+            ->groupBy('quiz_id')
+            ->get()
+            ->getResultArray();
+
+        $out = [];
+        foreach ($rows as $r) {
+            $out[(int) $r['quiz_id']] = (int) $r['total'];
+        }
+
+        return $out;
+    }
+
+    /** Rata-rata skor/persentase attempt selesai satu kuis (agregat, tanpa memuat baris). */
+    public function aggregateForQuiz(int $quizId): array
+    {
+        $row = $this->db->table('quiz_attempts')
+            ->select('COUNT(*) AS n, COALESCE(AVG(raw_score), 0) AS avg_raw, COALESCE(AVG(percentage), 0) AS avg_pct')
+            ->where('quiz_id', $quizId)
+            ->whereIn('status', ['submitted', 'timeout'])
+            ->get()
+            ->getRowArray();
+
+        return [
+            'n'       => (int) ($row['n'] ?? 0),
+            'avg_raw' => (float) ($row['avg_raw'] ?? 0),
+            'avg_pct' => (float) ($row['avg_pct'] ?? 0),
+        ];
+    }
+
+    /** Histori keikutsertaan mahasiswa: tiap baris adalah satu percobaan
      * dengan kode kuisnya masing-masing. Nomor percobaan dihitung backend
      * berdasarkan urutan attempt mahasiswa pada quiz yang sama.
      */

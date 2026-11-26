@@ -11,6 +11,17 @@ use App\Models\Quiz\QuizQuestionModel;
 /**
  * Pelaksanaan attempt: binding perangkat, snapshot soal/opsi,
  * penyimpanan jawaban idempotent, penilaian di server.
+ *
+ * Optimasi (shared hosting):
+ * - progressState() tidak lagi memuat snapshot (LONGTEXT) seluruh soal dan
+ *   seluruh histori jawaban; progres dihitung dari SATU query ringan
+ *   (LEFT JOIN pada tabel jawaban) + COUNT berindex, dan snapshot hanya
+ *   diambil untuk soal yang benar-benar ditampilkan.
+ * - recordAnswer() memvalidasi attempt + soal aktif + deadline dari hasil
+ *   progres yang sama (tidak ada query progres ganda), idempotent lewat
+ *   unique key, dan mengembalikan status selesai-nya attempt sehingga
+ *   controller tidak perlu menghitung ulang.
+ * - finalize() memakai SUM() agregat, bukan memuat seluruh baris.
  */
 class QuizScoringService
 {
@@ -115,9 +126,10 @@ class QuizScoringService
         $shuffled = $allQuestions;
         shuffle($shuffled);
 
+        $mapRows = [];
         foreach ($shuffled as $i => $q) {
             // Acak urutan opsi A-D; E ("Tidak tahu") selalu terakhir.
-            $letters    = ['a', 'b', 'c', 'd'];
+            $letters     = ['a', 'b', 'c', 'd'];
             shuffle($letters);
             $optionOrder = implode(',', $letters);
 
@@ -127,23 +139,31 @@ class QuizScoringService
                 $q['difficulty_level']
             );
 
-            $this->mapModel->insert([
-                'attempt_id'   => $attemptId,
-                'question_id'  => (int) $q['id'],
-                'sort_order'   => $i + 1,
-                'points'       => (int) $quiz['correct_points'],
-                'penalty'      => (int) $quiz['wrong_penalty'],
-                'snapshot'     => json_encode([
+            $mapRows[] = [
+                'attempt_id'       => $attemptId,
+                'question_id'      => (int) $q['id'],
+                'sort_order'       => $i + 1,
+                'points'           => (int) $quiz['correct_points'],
+                'penalty'          => (int) $quiz['wrong_penalty'],
+                'snapshot'         => json_encode([
                     'question_text'  => $q['question_text'],
                     'options'        => [
                         'a' => $q['option_a'], 'b' => $q['option_b'], 'c' => $q['option_c'], 'd' => $q['option_d'],
                     ],
                     'correct_option' => $q['correct_option'],
                 ]),
-                'option_order' => $optionOrder,
+                'option_order'     => $optionOrder,
                 'duration_seconds' => $duration,
-                'created_at'   => $now,
-            ]);
+                'created_at'       => $now,
+            ];
+        }
+
+        // Satu insertBatch (bukan N insert) untuk seluruh snapshot soal.
+        $inserted = $this->mapModel->insertBatch($mapRows);
+        if ($inserted === false || (int) $inserted !== count($mapRows)) {
+            $db->transRollback();
+
+            return ['ok' => false, 'error' => 'db_error'];
         }
 
         $db->transCommit();
@@ -182,75 +202,69 @@ class QuizScoringService
     // ================= Progres satu-soal-per-halaman =================
 
     /**
-     * State progres attempt: proses timeout berjantung di server.
+     * State progres attempt: proses timeout bergantung di server.
      * Soal berjalan berurutan; soal timeout diberi nilai 0 dan dilewati
      * otomatis ke soal berikutnya. Sumber waktu = server.
+     *
+     * Query per panggilan (jalur normal): 1 query baris belum-selesai
+     * (tanpa snapshot) + 1 COUNT berindex; snapshot (LONGTEXT) hanya
+     * dimuat untuk soal AKTIF yang akan ditampilkan. Refresh tidak mereset
+     * timer karena question_started_at/disimpan di database.
      *
      * @return array{current:?array, index:int, total:int, answered:int, remaining_sec:?int}
      */
     public function progressState(array $attempt): array
     {
-        $rows    = $this->mapModel->forAttempt((int) $attempt['id']);
-        $answers = $this->answers->forAttempt((int) $attempt['id']);
-        $answeredQids = array_map('intval', array_column($answers, 'question_id'));
+        $attemptId = (int) $attempt['id'];
+        $now       = time();
 
-        $total    = count($rows);
-        $answered = 0;
-        $current  = null;
+        $rows  = $this->mapModel->unfinishedRowsForAttempt($attemptId);
+        $total = $this->mapModel->countForAttempt($attemptId);
 
+        // Soal belum selesai yang deadlinenya sudah lewat -> nilai 0, lewati.
+        // (Baris berikut diproses dari daftar yang sudah ada di memori —
+        // tidak ada pembacaan ulang seluruh jawaban per iterasi.)
+        $current = null;
         foreach ($rows as $row) {
-            $isDone = in_array((int) $row['question_id'], $answeredQids, true) || (int) $row['is_expired'] === 1;
-
-            if ($isDone) {
-                $answered++;
-                continue;
+            if ($row['question_deadline_at'] !== null && strtotime((string) $row['question_deadline_at']) <= $now) {
+                if ($this->closeQuestion($row, null, 'timeout')) {
+                    continue;
+                }
             }
-
             $current = $row;
             break;
         }
 
-        // Proses timeout berjantung: soal aktif yang melewati deadline -> nilai 0, lanjut ke berikutnya.
-        while ($current !== null) {
-            if (! $this->expireIfNeeded($current)) {
-                break; // masih dalam waktu pengerjaan
-            }
-            $answered++;
-            // Cari baris berikutnya yang belum selesai (baca ulang jawaban terbaru).
-            $answeredQids = array_map('intval', array_column($this->answers->forAttempt((int) $attempt['id']), 'question_id'));
-            $current = null;
-            foreach ($rows as $row) {
-                $qid = (int) $row['question_id'];
-                if (in_array($qid, $answeredQids, true)) {
-                    continue;
-                }
-                $fresh = $this->mapModel->where('attempt_id', (int) $attempt['id'])->where('question_id', $qid)->first();
-                if ($fresh !== null && (int) $fresh['is_expired'] === 0) {
-                    $current = $fresh;
-                    break;
-                }
-            }
-        }
+        // Semua baris sebelum soal aktif pasti sudah selesai (dijawab/timeout):
+        // posisi = sort_order soal aktif, jumlah terjawab = posisi - 1.
+        $answered = $current !== null ? (int) $current['sort_order'] - 1 : $total;
+        $index    = $current !== null ? (int) $current['sort_order'] : $total + 1;
 
         $remainingSec = null;
         if ($current !== null) {
             if ($current['question_started_at'] === null) {
                 // Mulai timer soal ini di server (sekali saja; tidak direset oleh refresh).
-                $now      = date('Y-m-d H:i:s');
-                $deadline = date('Y-m-d H:i:s', time() + (int) $current['duration_seconds']);
+                $nowStr   = date('Y-m-d H:i:s', $now);
+                $deadline = date('Y-m-d H:i:s', $now + (int) $current['duration_seconds']);
                 $this->mapModel->update((int) $current['id'], [
-                    'question_started_at'  => $now,
+                    'question_started_at'  => $nowStr,
                     'question_deadline_at' => $deadline,
                 ]);
-                $current['question_started_at']  = $now;
+                $current['question_started_at']  = $nowStr;
                 $current['question_deadline_at'] = $deadline;
             }
-            $remainingSec = max(0, strtotime((string) $current['question_deadline_at']) - time());
+            $remainingSec = max(0, strtotime((string) $current['question_deadline_at']) - $now);
+
+            // Snapshot (teks soal + opsi) hanya untuk soal aktif ini.
+            $full = $this->mapModel->find((int) $current['id']);
+            if ($full !== null) {
+                $current = $full;
+            }
         }
 
         return [
             'current'       => $current,
-            'index'         => $answered + 1,
+            'index'         => $index,
             'total'         => $total,
             'answered'      => $answered,
             'remaining_sec' => $remainingSec,
@@ -278,7 +292,7 @@ class QuizScoringService
      */
     public function abandonCurrentQuestion(array $attempt): bool
     {
-        $state = $this->progressState($attempt);
+        $state   = $this->progressState($attempt);
         $current = $state['current'];
         if ($current === null) {
             return false;
@@ -323,7 +337,14 @@ class QuizScoringService
     /**
      * Simpan jawaban (idempotent per attempt+soal).
      *
+     * Satu perhitungan progres dipakai untuk memvalidasi soal aktif + deadline
+     * + menyiapkan snapshot penilaian; hasilnya juga menandai apakah attempt
+     * sudah selesai (soal terakhir) sehingga pemanggil tidak perlu menghitung
+     * ulang progres.
+     *
      * @param string $selectedLetter huruf TAMPILAN yang dipilih (A-E)
+     *
+     * @return array{ok:bool, error?:string, duplicate?:bool, finished?:bool}
      */
     public function recordAnswer(array $attempt, int $questionId, ?string $selectedLetter): array
     {
@@ -336,16 +357,21 @@ class QuizScoringService
             return ['ok' => false, 'error' => 'expired'];
         }
 
-        $map = $this->mapModel->where('attempt_id', $attempt['id'])->where('question_id', $questionId)->first();
-        if ($map === null) {
-            return ['ok' => false, 'error' => 'question_not_in_attempt'];
-        }
-
-        // Satu soal = satu kali jawab; hanya soal AKTIF yang boleh dijawab.
-        $state = $this->progressState($attempt);
+        // Satu panggilan progres: soal aktif (dengan snapshot) + sisa soal.
+        $state   = $this->progressState($attempt);
         $current = $state['current'];
-        if ($current === null || (int) $current['question_id'] !== $questionId) {
+
+        if ($current === null) {
             return ['ok' => false, 'error' => 'not_current_question'];
+        }
+        if ((int) $current['question_id'] !== $questionId) {
+            // Soal tidak termasuk attempt ini, atau bukan soal aktif (sudah
+            // terjawab/selesai) — keduanya ditolak dengan pengecekan unik
+            // berikut agar pesan tetap spesifik.
+            $inAttempt = $this->mapModel->where('attempt_id', (int) $attempt['id'])
+                ->where('question_id', $questionId)->countAllResults() > 0;
+
+            return ['ok' => false, 'error' => $inAttempt ? 'not_current_question' : 'question_not_in_attempt'];
         }
 
         // Deadline divalidasi pakai waktu server; jawaban setelah waktu habis ditolak.
@@ -355,13 +381,8 @@ class QuizScoringService
             return ['ok' => false, 'error' => 'expired'];
         }
 
-        $existing = $this->answers->where('attempt_id', $attempt['id'])->where('question_id', $questionId)->first();
-        if ($existing !== null) {
-            return ['ok' => true, 'duplicate' => true]; // idempotent
-        }
-
-        $snapshot = json_decode((string) $map['snapshot'], true);
-        $order    = array_map('trim', explode(',', (string) $map['option_order']));
+        $snapshot = json_decode((string) $current['snapshot'], true);
+        $order    = array_map('trim', explode(',', (string) $current['option_order']));
 
         $selected  = strtoupper((string) $selectedLetter);
         $original  = null;
@@ -378,18 +399,18 @@ class QuizScoringService
 
         $points = match (true) {
             $original === null || $original === 'E' => 0,
-            $isCorrect                              => (int) $map['points'],
-            default                                 => -1 * (int) $map['penalty'],
+            $isCorrect                              => (int) $current['points'],
+            default                                 => -1 * (int) $current['penalty'],
         };
 
         $now = date('Y-m-d H:i:s');
         $responseMs = null;
-        $startedAt  = (string) $attempt['started_at'];
+        $startedAt  = (string) $current['question_started_at'];
         if ($startedAt !== '') {
             $responseMs = max(0, (int) floor((time() - strtotime($startedAt)) * 1000));
         }
 
-        $ok = $this->answers->saveAnswer([
+        $result = $this->answers->saveAnswer([
             'attempt_id'       => (int) $attempt['id'],
             'question_id'      => $questionId,
             'selected_option'  => $selected === '' ? null : $selected,
@@ -401,7 +422,17 @@ class QuizScoringService
             'created_at'       => $now,
         ]);
 
-        return $ok ? ['ok' => true] : ['ok' => false, 'error' => 'db_error'];
+        if ($result === 'error') {
+            return ['ok' => false, 'error' => 'db_error'];
+        }
+        if ($result === 'duplicate') {
+            // Idempotent: jawaban soal ini sudah tersimpan (request ganda/race).
+            return ['ok' => true, 'duplicate' => true];
+        }
+
+        // Soal ini adalah yang terakhir? (state dihitung SEBELUM insert:
+        // current = soal aktif; selesai bila tidak ada baris setelahnya.)
+        return ['ok' => true, 'finished' => $state['index'] === $state['total']];
     }
 
     // =========================== Finalisasi ==========================
@@ -413,12 +444,10 @@ class QuizScoringService
             return ['ok' => false, 'error' => 'already_final'];
         }
 
-        $rows   = $this->mapModel->forAttempt((int) $attempt['id']);
-        $points = array_map(static fn ($r) => (int) $r['points'], $rows);
-        $max    = array_sum($points);
-
-        $raw    = (int) array_sum(array_column($this->answers->forAttempt((int) $attempt['id']), 'points_awarded'));
-        $pct    = $max > 0 ? round(max(0, $raw) / $max * 100, 2) : null;
+        // SUM agregat — tanpa memuat seluruh baris map/jawaban.
+        $max = $this->mapModel->sumPointsForAttempt((int) $attempt['id']);
+        $raw = $this->answers->sumPointsForAttempt((int) $attempt['id']);
+        $pct = $max > 0 ? round(max(0, $raw) / $max * 100, 2) : null;
 
         $this->attempts->update((int) $attempt['id'], [
             'status'       => $status,
