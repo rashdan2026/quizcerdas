@@ -34,9 +34,13 @@ update-pass.php
 public/check.php
 public/simple-check.php
 public/test-report.php
+public/_test_v586.php
 public/run-migrations.php
+public/run-migration-dosen.php
+public/check-schema-dosen.php
 public/update-lecturer-pass.php
 new_entry.txt
+update_jenkel.sql
 
 # Temporary and Debug scripts
 update_*.php
