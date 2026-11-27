@@ -720,7 +720,8 @@ document.getElementById('qcount').addEventListener('change', function () {
                             ? 'Server mengalami kesalahan (HTTP ' + res.status + '). Coba lagi; bila berulang, lihat log aplikasi atau hubungi administrator. Anda tetap bisa langsung menekan Generate tanpa Periksa.'
                             : 'Respons server tidak dapat dibaca. Coba lagi; Anda tetap bisa langsung menekan Generate tanpa Periksa.';
                     }
-                    body.innerHTML = '<div class="alert alert-danger small mb-0">' + documentEscape(msg) + '</div>';
+                    var dbg = (d && d.debug) ? '<div class="small text-muted mt-1" style="word-break:break-all;">Detail teknis: ' + documentEscape(d.debug) + '</div>' : '';
+                    body.innerHTML = '<div class="alert alert-danger small mb-0">' + documentEscape(msg) + '</div>' + dbg;
                     return;
                 }
                 render(d);

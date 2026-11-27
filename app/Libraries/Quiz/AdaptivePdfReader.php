@@ -66,9 +66,15 @@ class AdaptivePdfReader
 
         $pages = $this->extractWithSmalot($path, $password);
 
-        $methods   = [];
-        $ocrInfo   = $this->ocr->availability();
-        $warnings  = [];
+        $methods  = [];
+        $warnings = [];
+        try {
+            $ocrInfo = $this->ocr->availability();
+        } catch (\Throwable $e) {
+            // OCR tidak boleh menjadi penyebab kegagalan analisis.
+            log_message('warning', 'AdaptivePdfReader: deteksi OCR gagal — {msg}', ['msg' => mb_substr($e->getMessage(), 0, 200)]);
+            $ocrInfo = ['available' => false, 'reason' => 'error'];
+        }
 
         if ($pages !== []) {
             $methods[] = 'smalot';
@@ -97,11 +103,18 @@ class AdaptivePdfReader
         }
 
         // Teks akhir: normalisasi konservatif dengan penanda halaman.
+        // Normalizer tidak boleh membuat analisis gagal: bila gagal, pakai teks
+        // hasil scrub sederhana (bersihkan UTF-8/karakter kontrol).
         $pageTexts = [];
         foreach ($pages as $p) {
             $pageTexts[] = $p['text'] ?? '';
         }
-        $normalized = ExtractNormalizer::normalize(implode("\n", $pageTexts), $pageTexts);
+        try {
+            $normalized = ExtractNormalizer::normalize(implode("\n", $pageTexts), $pageTexts);
+        } catch (\Throwable $e) {
+            log_message('warning', 'AdaptivePdfReader: normalisasi gagal (fallback scrub) — {msg}', ['msg' => mb_substr($e->getMessage(), 0, 200)]);
+            $normalized = ExtractNormalizer::scrub(implode("\n", $pageTexts));
+        }
         if (mb_strlen($normalized) > self::MAX_OUTPUT_CHARS) {
             $normalized = mb_substr($normalized, 0, self::MAX_OUTPUT_CHARS) . "\n[TRUNCATED]";
         }
@@ -225,7 +238,12 @@ class AdaptivePdfReader
                 $warnings[] = 'OCR dihentikan karena batas waktu ekstraksi.';
                 break;
             }
-            $res = $this->ocr->ocrPage($path, (int) $pages[$i]['page']);
+            try {
+                $res = $this->ocr->ocrPage($path, (int) $pages[$i]['page']);
+            } catch (\Throwable $e) {
+                log_message('warning', 'AdaptivePdfReader: OCR halaman {page} gagal — {msg}', ['page' => $pages[$i]['page'], 'msg' => mb_substr($e->getMessage(), 0, 200)]);
+                $res = ['ok' => false, 'text' => '', 'error' => 'ocr_failed'];
+            }
             if ($res['ok'] && trim($res['text']) !== '') {
                 $pages[$i]['text']   = trim($res['text']);
                 $pages[$i]['method'] = 'ocr';

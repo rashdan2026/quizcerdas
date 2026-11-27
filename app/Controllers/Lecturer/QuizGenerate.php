@@ -420,6 +420,20 @@ class QuizGenerate extends BaseController
             return $this->json(['ok' => false, 'error' => 'empty_file', 'message' => 'File kosong.'], 422);
         }
 
+        // Kelas pendukung juga wajib ada — deployment parsial (folder Support/
+        // tidak ikut) adalah penyebab umum kegagalan analisis di server.
+        $missing = array_filter([
+            \App\Libraries\Quiz\Support\OcrEngine::class,
+            \App\Libraries\Quiz\Support\ExtractNormalizer::class,
+        ], static fn ($c) => ! class_exists($c));
+        if ($missing !== []) {
+            return $this->json([
+                'ok'      => false,
+                'error'   => 'deployment_incomplete',
+                'message' => 'Komponen analisis PDF belum lengkap di server: berkas ' . implode(', ', array_map(static fn ($c) => str_replace('App\\Libraries\\Quiz\\', 'app/Libraries/Quiz/', $c) . '.php', $missing)) . ' tidak ditemukan. Sinkronkan seluruh berkas terbaru ke server. Anda tetap bisa langsung menekan Generate tanpa Periksa.',
+            ], 503);
+        }
+
         $tmpPath = $file->getTempName();
         $head    = (string) file_get_contents($tmpPath, false, null, 0, 1024);
         $isPdf   = str_contains($head, '%PDF-');
@@ -439,7 +453,17 @@ class QuizGenerate extends BaseController
         // Simpan sementara + pindai malware (sama ketat dengan jalur generate).
         $token   = bin2hex(random_bytes(16));
         $pdfPath = $dir . '/analyze_' . $token . '.pdf';
-        $file->move($dir, basename($pdfPath));
+        try {
+            $file->move($dir, basename($pdfPath));
+        } catch (\Throwable $e) {
+            log_message('error', 'QuizGenerate::analyzePdf gagal menyimpan PDF sementara ke {dir} — {msg}', ['dir' => $dir, 'msg' => mb_substr($e->getMessage(), 0, 200)]);
+
+            return $this->json([
+                'ok'      => false,
+                'error'   => 'storage_error',
+                'message' => 'Server gagal menyimpan berkas sementara (kemungkinan izin folder writable/). Administrator perlu memastikan folder writable/quiz_tmp dapat ditulis.',
+            ], 500);
+        }
 
         try {
             // Analisis dapat memakai memori lebih (PDF besar, banyak halaman).
@@ -477,6 +501,7 @@ class QuizGenerate extends BaseController
                 'ok'      => false,
                 'error'   => 'server_error',
                 'message' => 'Pemeriksaan PDF gagal karena kesalahan internal server (detail dicatat di log aplikasi). Anda tetap bisa langsung menekan Generate tanpa Periksa; bila Generate juga gagal, hubungi administrator.',
+                'debug'   => mb_substr($e::class . ': ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine(), 0, 300),
             ], 500);
         }
 
