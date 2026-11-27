@@ -191,7 +191,11 @@ class QuizGenerate extends BaseController
 
             $file = $this->request->getFile('pdf_file');
             if ($file === null || ! $file->isValid()) {
-                return ['ok' => false, 'error' => 'invalid_file', 'message' => 'File PDF tidak valid.'];
+                return [
+                    'ok'      => false,
+                    'error'   => 'invalid_file',
+                    'message' => $this->uploadErrorMessage($file),
+                ];
             }
 
             if ($file->getSize() > self::MAX_BYTES) {
@@ -385,7 +389,11 @@ class QuizGenerate extends BaseController
 
         $file = $this->request->getFile('pdf_file');
         if ($file === null || ! $file->isValid()) {
-            return $this->json(['ok' => false, 'error' => 'invalid_file', 'message' => 'File PDF tidak valid.'], 422);
+            return $this->json([
+                'ok'      => false,
+                'error'   => 'invalid_file',
+                'message' => $this->uploadErrorMessage($file),
+            ], 422);
         }
         if ($file->getSize() > self::MAX_BYTES) {
             return $this->json(['ok' => false, 'error' => 'too_large', 'message' => 'Ukuran PDF maksimum 10 MB.'], 422);
@@ -513,6 +521,60 @@ class QuizGenerate extends BaseController
         }
 
         return $dir;
+    }
+
+    /**
+     * Return a useful, safe upload error. PHP marks uploads larger than
+     * upload_max_filesize as invalid before application-level size checks run;
+     * post_max_size can even leave getFile() empty. Do not misreport those
+     * cases as a corrupt PDF.
+     */
+    private function uploadErrorMessage($file): string
+    {
+        $contentLength = (int) ($this->request->getServer('CONTENT_LENGTH') ?? 0);
+        $postLimit = $this->iniBytes((string) ini_get('post_max_size'));
+        if ($contentLength > 0 && $postLimit > 0 && $contentLength > $postLimit) {
+            return 'Ukuran file PDF melewati batas upload server (post_max_size). Batas aplikasi adalah 10 MB; kompres PDF atau pecah menjadi beberapa file di bawah 10 MB, lalu coba lagi.';
+        }
+
+        if ($file !== null && method_exists($file, 'getError')) {
+            return match ((int) $file->getError()) {
+                UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE =>
+                    'Ukuran file PDF melewati batas upload server. Batas aplikasi adalah 10 MB; kompres PDF atau pecah menjadi beberapa file di bawah 10 MB, lalu coba lagi.',
+                UPLOAD_ERR_PARTIAL =>
+                    'Upload PDF terputus sebelum selesai. Periksa koneksi lalu unggah ulang.',
+                UPLOAD_ERR_NO_TMP_DIR =>
+                    'Server tidak memiliki folder sementara upload yang tersedia. Hubungi administrator.',
+                UPLOAD_ERR_CANT_WRITE =>
+                    'Server gagal menyimpan file sementara upload. Coba lagi atau hubungi administrator.',
+                UPLOAD_ERR_EXTENSION =>
+                    'Upload PDF dihentikan oleh konfigurasi ekstensi PHP. Hubungi administrator.',
+                UPLOAD_ERR_NO_FILE =>
+                    'File PDF belum terkirim. Pilih file kembali lalu coba lagi.',
+                default =>
+                    'Upload PDF gagal atau file tidak diterima server. Pilih ulang file dan coba lagi.',
+            };
+        }
+
+        return 'File PDF tidak terkirim dengan benar. Pilih file kembali dan pastikan ukurannya tidak lebih dari 10 MB.';
+    }
+
+    private function iniBytes(string $value): int
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return 0;
+        }
+
+        $unit = strtolower(substr($value, -1));
+        $number = (float) $value;
+
+        return (int) match ($unit) {
+            'g' => $number * 1024 * 1024 * 1024,
+            'm' => $number * 1024 * 1024,
+            'k' => $number * 1024,
+            default => $number,
+        };
     }
 
     /**

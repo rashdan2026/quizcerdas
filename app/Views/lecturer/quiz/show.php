@@ -676,6 +676,16 @@ document.getElementById('qcount').addEventListener('change', function () {
             alert('Pilih file PDF terlebih dahulu, lalu klik Periksa.');
             return;
         }
+        if (file.files[0].size > 10485760) {
+            tokenInput.value = '';
+            box.classList.remove('d-none');
+            box.className = 'card mt-3 border-warning';
+            spinner.classList.add('d-none');
+            icon.className = 'bi bi-exclamation-triangle-fill text-warning';
+            titleEl.textContent = 'Ukuran PDF melebihi batas';
+            body.textContent = 'Batas aplikasi adalah 10 MB. Kompres ebook.pdf atau pecah menjadi beberapa PDF yang masing-masing di bawah 10 MB, lalu pilih ulang.';
+            return;
+        }
         var fd = new FormData();
         fd.append(file.name, file.files[0]);
         var csrf = form.querySelector('input[name="csrf_test_name"]');
@@ -825,6 +835,10 @@ document.getElementById('qcount').addEventListener('change', function () {
         var hasFile = form.pdf_file.files && form.pdf_file.files.length;
         if (!reuseToken && !hasFile) {
             setBox('danger', 'File PDF belum dipilih', 'Pilih file PDF materi terlebih dahulu (saran: klik Periksa dulu untuk menilai hasil pembacaan).');
+            return;
+        }
+        if (!reuseToken && form.pdf_file.files[0].size > 10485760) {
+            setBox('danger', 'Ukuran PDF melebihi batas', 'Batas aplikasi adalah 10 MB. Kompres ebook.pdf atau pecah menjadi beberapa PDF yang masing-masing di bawah 10 MB, lalu pilih ulang.');
             return;
         }
         setBusy(true);
