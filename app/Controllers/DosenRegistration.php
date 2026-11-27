@@ -18,7 +18,6 @@ class DosenRegistration extends BaseController
     // Konfigurasi keamanan kode verifikasi (satu sumber, jangan disebar).
     private const CODE_TTL_MINUTES   = 15;  // masa berlaku kode verifikasi
     private const MAX_VERIFY_ATTEMPTS = 5;  // batas percobaan verifikasi per pendaftaran
-    private const RESEND_COOLDOWN_SEC = 60; // jeda minimal pengiriman ulang
     private const PENDING_TTL_HOURS   = 24; // usia maksimum data pending (dibersihkan otomatis)
 
     public function __construct()
@@ -109,7 +108,6 @@ class DosenRegistration extends BaseController
             'verify_code_hash'   => password_hash($code, PASSWORD_BCRYPT),
             'verify_expires_at'  => date('Y-m-d H:i:s', strtotime('+' . self::CODE_TTL_MINUTES . ' minutes')),
             'verify_attempts'    => 0,
-            'resend_available_at' => date('Y-m-d H:i:s', time() + self::RESEND_COOLDOWN_SEC),
         ];
 
         if ($pending) {
@@ -151,9 +149,10 @@ class DosenRegistration extends BaseController
             'email'          => $email,
             'code_valid'     => $pending && strtotime($pending['verify_expires_at']) > time(),
             'expired_at'     => $pending ? $pending['verify_expires_at'] : null,
-            'resend_at'      => $pending ? $pending['resend_available_at'] : null,
             'attempts_left'  => $pending ? max(0, self::MAX_VERIFY_ATTEMPTS - (int) $pending['verify_attempts']) : 0,
             'dev_dosen_otp'  => ENVIRONMENT === 'development' ? session()->get('dev_dosen_otp') : null,
+            // Status kirim-ulang email (countdown & kuota harian, v10.0).
+            'resend'         => (new \App\Libraries\EmailResendGate())->state($email),
         ];
 
         return view('auth/register_dosen_verify', $data);
@@ -225,6 +224,8 @@ class DosenRegistration extends BaseController
             'is_active'     => 1,
             'email_verified'    => 1,
             'profile_confirmed' => 0, // first login: wajib konfirmasi profil
+            // Snapshot limitasi default yang berlaku saat akun dibuat (v10.0).
+            (new \App\Libraries\LecturerLimits())->snapshotForNewLecturer(),
         ]);
 
         // Kode hanya dipakai sekali: hapus data pending (kode tidak berlaku lagi).
@@ -249,10 +250,13 @@ class DosenRegistration extends BaseController
             return redirect()->to('/register/dosen')->with('error', 'Data pendaftaran tidak ditemukan. Silakan daftar ulang.');
         }
 
-        // Rate limiting pengiriman ulang.
-        if ($pending['resend_available_at'] && strtotime($pending['resend_available_at']) > time()) {
-            $wait = strtotime($pending['resend_available_at']) - time();
-            return redirect()->back()->with('error', 'Tunggu ' . $wait . ' detik sebelum meminta kode baru.');
+        // Pembatasan resend terpusat (v10.0): maks 4/hari + jeda progresif,
+        // counter bersama per alamat email. Slot direservasi atomik;
+        // request ganda ditolak di sini.
+        $gate = new \App\Libraries\EmailResendGate();
+        $slot = $gate->reserve($email, 'dosen_verify');
+        if (! $slot['ok']) {
+            return redirect()->back()->with('error', $slot['message']);
         }
 
         // Kode baru acak (cryptographically secure). Baris pending TIDAK
@@ -264,10 +268,10 @@ class DosenRegistration extends BaseController
             'verify_code_hash'    => password_hash($code, PASSWORD_BCRYPT),
             'verify_expires_at'   => date('Y-m-d H:i:s', strtotime('+' . self::CODE_TTL_MINUTES . ' minutes')),
             'verify_attempts'     => 0,
-            'resend_available_at' => date('Y-m-d H:i:s', time() + self::RESEND_COOLDOWN_SEC),
         ]);
 
         $mailResult = $this->sendVerificationEmail($email, $pending['nama'], $code);
+        $gate->finalize($email, (int) $slot['log_id'], $mailResult['ok'], $mailResult['ok'] ? '' : $mailResult['message']);
 
         if (! $mailResult['ok']) {
             if (ENVIRONMENT === 'development') {

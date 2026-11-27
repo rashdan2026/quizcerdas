@@ -2,8 +2,20 @@
 <?= $this->section('content') ?>
 <h4 class="page-title mb-3"><i class="bi bi-plus-circle me-2"></i>Buat Kuis Baru</h4>
 
+<?php if (! empty($usage)): ?>
+    <div class="alert <?= $usage['remaining']['quizzes'] === 0 ? 'alert-danger' : 'alert-info' ?> py-2 small">
+        <i class="bi bi-speedometer2 me-1"></i>Kuis yang telah dibuat: <?= (int) $usage['used']['quizzes'] ?> dari <?= (int) $usage['limits']['quizzes'] ?>.
+        <?php if ($usage['remaining']['quizzes'] === 0): ?>
+            Anda telah mencapai batas maksimal pembuatan kuis. Silakan hubungi Admin apabila membutuhkan penambahan kuota.
+        <?php endif; ?>
+    </div>
+<?php endif; ?>
+
 <div class="card"><div class="card-body">
-    <form method="post" action="<?= base_url('/lecturer/quiz/create') ?>">
+    <?php if (! empty($usage) && $usage['remaining']['quizzes'] === 0): ?>
+        <button type="submit" class="btn btn-primary" disabled>Tidak dapat membuat kuis — kuota habis</button>
+    <?php endif; ?>
+    <form method="post" action="<?= base_url('/lecturer/quiz/create') ?>" <?= (! empty($usage) && $usage['remaining']['quizzes'] === 0) ? 'hidden' : '' ?>>
         <?= csrf_field() ?>
         <div class="mb-3">
             <label class="form-label">Mata Kuliah <span class="text-danger">*</span></label>

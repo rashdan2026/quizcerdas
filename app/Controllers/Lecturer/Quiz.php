@@ -3,6 +3,7 @@
 namespace App\Controllers\Lecturer;
 
 use App\Controllers\BaseController;
+use App\Libraries\LecturerLimits;
 use App\Libraries\Quiz\QuizScoringService;
 use App\Models\Quiz\QuizAccessCodeModel;
 use App\Models\Quiz\QuizAttemptModel;
@@ -41,7 +42,10 @@ class Quiz extends BaseController
         }
         unset($q);
 
-        return view('lecturer/quiz/index', ['quizzes' => $quizzes]);
+        return view('lecturer/quiz/index', [
+            'quizzes' => $quizzes,
+            'usage'   => (new LecturerLimits())->forLecturer($this->lid()),
+        ]);
     }
 
     public function create()
@@ -54,7 +58,17 @@ class Quiz extends BaseController
                 ->orderBy('nama_mk', 'ASC')
                 ->findAll();
 
-            return view('lecturer/quiz/create_form', ['subjects' => $subjects]);
+            return view('lecturer/quiz/create_form', [
+                'subjects' => $subjects,
+                'usage'    => (new LecturerLimits())->forLecturer($this->lid()),
+            ]);
+        }
+
+        // Limitasi backend: maksimal pembuatan kuis per dosen (kuis yang
+        // diarsipkan tetap terhitung — tidak bisa diakali dengan hapus+tambah).
+        $limitCheck = (new LecturerLimits())->checkQuiz($this->lid());
+        if (! $limitCheck['ok']) {
+            return redirect()->to('/lecturer/quiz')->with('error', $limitCheck['message']);
         }
 
         $subjectId = (int) $this->request->getPost('subject_id');
@@ -122,8 +136,10 @@ class Quiz extends BaseController
             'deactivated_at' => null,
         ]);
 
+        $usageAfter = (new LecturerLimits())->forLecturer($this->lid());
+
         return redirect()->to('/lecturer/quiz/' . $id)
-            ->with('success', 'Kuis berhasil dibuat dengan kode peserta: ' . $this->model->find($id)['access_code'] . '. Silakan tambahkan soal.');
+            ->with('success', 'Kuis berhasil dibuat dengan kode peserta: ' . $this->model->find($id)['access_code'] . '. Silakan tambahkan soal. (Kuis: ' . $usageAfter['used']['quizzes'] . ' dari ' . $usageAfter['limits']['quizzes'] . ')');
     }
 
     /**
@@ -228,6 +244,7 @@ class Quiz extends BaseController
             'counts'   => \App\Libraries\Quiz\QuestionGenerationService::ALLOWED_COUNTS,
             'maxQuestions' => \App\Libraries\Quiz\QuestionGenerationService::MAX_QUESTIONS_PER_QUIZ,
             'capacity' => max(0, \App\Libraries\Quiz\QuestionGenerationService::MAX_QUESTIONS_PER_QUIZ - (int) $stats['total']),
+            'aiQuota'  => (new LecturerLimits())->forLecturer($this->lid()),
             'activeBatch'  => $activeBatch ? ['id' => (int) $activeBatch['id'], 'status' => (string) $activeBatch['status']] : null,
             'search'   => $search,
             'page'     => $page,
@@ -333,17 +350,12 @@ class Quiz extends BaseController
     {
         $quiz = $this->ownedOrFail($id);
 
-        // Lindungi histori nilai: kuis yang sudah pernah dikerjakan tidak boleh dihapus, hanya diarsipkan.
-        $hasAttempts = (new QuizAttemptModel())->where('quiz_id', $id)->countAllResults();
-        if ($hasAttempts > 0) {
-            $this->model->update($id, ['status' => 'archived', 'updated_at' => date('Y-m-d H:i:s')]);
+        // Selalu ARSIP (bukan hard delete): kuis tetap terhitung dalam limitasi
+        // pembuatan per dosen (anti-abuse: hapus+tambah tidak bisa mengakali
+        // kuota) dan seluruh riwayat tetap aman.
+        $this->model->update($id, ['status' => 'archived', 'updated_at' => date('Y-m-d H:i:s')]);
 
-            return redirect()->to('/lecturer/quiz')->with('info', 'Kuis memiliki riwayat attempt sehingga diarsipkan, bukan dihapus.');
-        }
-
-        $this->model->delete($id);
-
-        return redirect()->to('/lecturer/quiz')->with('success', 'Kuis dihapus.');
+        return redirect()->to('/lecturer/quiz')->with('info', 'Kuis diarsipkan (bukan dihapus permanen) dan tetap terhitung dalam kuota pembuatan kuis.');
     }
 
     /** Daftar kuis milik dosen (submenu Nilai Mahasiswa). */

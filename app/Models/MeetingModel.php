@@ -18,9 +18,15 @@ class MeetingModel extends Model
         'pdf_file_id',
         'token_qr',
         'expired_at',
+        'deleted_at',
         'created_at',
         'updated_at',
     ];
 
     protected $useTimestamps = true;
+
+    // Soft delete: pertemuan yang dihapus tetap terhitung untuk limit
+    // pembuatan per mata kuliah (anti-abuse), tapi tidak tampil di aplikasi.
+    protected $useSoftDeletes = true;
+    protected $deletedField   = 'deleted_at';
 }

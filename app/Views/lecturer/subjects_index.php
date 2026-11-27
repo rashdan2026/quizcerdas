@@ -12,9 +12,54 @@
         <a href="<?= base_url('/lecturer/report') ?>" class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1">
             <i class="bi bi-bar-chart"></i> Rekap
         </a>
+        <?php $subjectLimitReached = $usage['used']['subjects'] >= $usage['limits']['subjects']; ?>
+        <?php if (! $subjectLimitReached): ?>
         <a href="<?= base_url('/lecturer/subjects/create') ?>" class="btn btn-primary btn-sm d-flex align-items-center gap-1">
             <i class="bi bi-plus-lg"></i> Tambah
         </a>
+        <?php endif; ?>
+    </div>
+</div>
+
+<!-- Ringkasan penggunaan resource (v10.0) -->
+<div class="card mb-4">
+    <div class="card-header"><i class="bi bi-speedometer2 me-2"></i>Penggunaan Resource</div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="small fw-600"><i class="bi bi-book me-1"></i>Mata Kuliah</span>
+                    <span class="small text-muted"><?= (int) $usage['used']['subjects'] ?> / <?= (int) $usage['limits']['subjects'] ?></span>
+                </div>
+                <div class="progress" style="height:8px;">
+                    <div class="progress-bar <?= $usage['remaining']['subjects'] === 0 ? 'bg-danger' : '' ?>" style="width: <?= min(100, round($usage['used']['subjects'] / max(1, $usage['limits']['subjects']) * 100)) ?>%"></div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="small fw-600"><i class="bi bi-lightbulb me-1"></i>Kuis</span>
+                    <span class="small text-muted"><?= (int) $usage['used']['quizzes'] ?> / <?= (int) $usage['limits']['quizzes'] ?></span>
+                </div>
+                <div class="progress" style="height:8px;">
+                    <div class="progress-bar <?= $usage['remaining']['quizzes'] === 0 ? 'bg-danger' : '' ?>" style="width: <?= min(100, round($usage['used']['quizzes'] / max(1, $usage['limits']['quizzes']) * 100)) ?>%"></div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="small fw-600"><i class="bi bi-cpu me-1"></i>Generate AI Minggu Ini</span>
+                    <span class="small text-muted"><?= (int) $usage['used']['ai'] ?> / <?= (int) $usage['limits']['ai'] ?> soal</span>
+                </div>
+                <div class="progress" style="height:8px;">
+                    <div class="progress-bar <?= $usage['remaining']['ai'] === 0 ? 'bg-danger' : ($usage['remaining']['ai'] <= ($usage['limits']['ai'] * 0.2) ? 'bg-warning' : '') ?>" style="width: <?= min(100, round($usage['used']['ai'] / max(1, $usage['limits']['ai']) * 100)) ?>%"></div>
+                </div>
+                <small class="text-muted">Sisa: <?= (int) $usage['remaining']['ai'] ?> soal · reset Senin 00.00 WIB</small>
+            </div>
+        </div>
+        <?php if ($subjectLimitReached): ?>
+            <div class="alert alert-warning py-2 mt-3 mb-0 small">
+                Anda telah mencapai batas maksimal <?= (int) $usage['limits']['subjects'] ?> mata kuliah. Silakan hubungi Admin apabila membutuhkan penambahan kuota.
+            </div>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -25,15 +70,20 @@
             <tr>
                 <th>Kode MK</th>
                 <th>Nama Matakuliah</th>
+                <th class="text-center">Pertemuan</th>
                 <th class="text-center">Status</th>
                 <th class="text-center">Aksi</th>
             </tr>
             </thead>
             <tbody>
             <?php foreach ($subjects as $subject): ?>
+                <?php $mCount = $meetingCounts[(int) $subject['id']] ?? 0; $mFull = $mCount >= $usage['limits']['meetings']; ?>
                 <tr>
                     <td><code class="fw-600" style="color:#4F46E5;"><?= esc($subject['kode_mk']) ?></code></td>
                     <td><?= esc($subject['nama_mk']) ?></td>
+                    <td class="text-center">
+                        <span class="badge <?= $mFull ? 'bg-danger' : 'bg-info' ?> rounded-pill"><?= (int) $mCount ?> / <?= (int) $usage['limits']['meetings'] ?></span>
+                    </td>
                     <td class="text-center">
                         <?php if ($subject['is_active']): ?>
                             <span class="badge bg-success rounded-pill px-3"><i class="bi bi-check-circle me-1"></i>Aktif</span>
@@ -59,7 +109,7 @@
             <?php endforeach; ?>
             <?php if (empty($subjects)): ?>
                 <tr>
-                    <td colspan="4" class="text-center py-5">
+                    <td colspan="5" class="text-center py-5">
                         <i class="bi bi-book display-6 text-muted d-block mb-2"></i>
                         <p class="text-muted mb-2">Belum ada matakuliah.</p>
                         <a href="<?= base_url('/lecturer/subjects/create') ?>" class="btn btn-primary btn-sm">

@@ -156,6 +156,8 @@ class Registration extends BaseController
             'otp_valid' => $otpRow && strtotime($otpRow['expired_at']) > time(),
             'expired_at' => $otpRow ? $otpRow['expired_at'] : null,
             'dev_reg_otp' => ENVIRONMENT === 'development' ? session()->get('dev_reg_otp') : null,
+            // Status kirim-ulang email (countdown & kuota harian, v10.0).
+            'resend' => (new \App\Libraries\EmailResendGate())->state($pendingEmail),
         ];
 
         return view('auth/register_verify', $data);
@@ -219,10 +221,18 @@ class Registration extends BaseController
             return redirect()->to('/register')->with('error', 'Sesi pendaftaran tidak ditemukan.');
         }
 
+        // Pembatasan resend terpusat (v10.0): maks 4/hari + jeda progresif.
+        // Slot direservasi atomik; request ganda ditolak di sini.
+        $gate = new \App\Libraries\EmailResendGate();
+        $slot = $gate->reserve($pendingEmail, 'mahasiswa_verify');
+        if (! $slot['ok']) {
+            return redirect()->back()->with('error', $slot['message']);
+        }
+
+        $otpCode = (string) random_int(100000, 999999);
         $otpModel = new OtpCodeModel();
         $otpModel->where('email', $pendingEmail)->delete();
 
-        $otpCode = (string) random_int(100000, 999999);
         $otpModel->insert([
             'email'      => $pendingEmail,
             'otp_code'   => $otpCode,
@@ -231,6 +241,7 @@ class Registration extends BaseController
         ]);
 
         $mailResult = $this->sendVerificationEmail($pendingEmail, $pendingData['nama'], $otpCode);
+        $gate->finalize($pendingEmail, (int) $slot['log_id'], $mailResult['ok'], $mailResult['ok'] ? '' : $mailResult['message']);
 
         if (!$mailResult['ok']) {
             if (ENVIRONMENT === 'development') {

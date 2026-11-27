@@ -24,6 +24,7 @@ class Scan extends BaseController
         $meetings = db_connect()->table('meetings m')
             ->select('m.id, m.judul, m.pertemuan_ke, s.kode_mk, s.nama_mk')
             ->join('subjects s', 's.id = m.subject_id')
+            ->where('m.deleted_at', null)
             ->where('s.is_active', 1)
             ->orderBy('m.id', 'DESC')
             ->get()
@@ -141,6 +142,7 @@ class Scan extends BaseController
         // Lookup by current token (grace period via expired_at >= now-60)
         $meeting = $db->table('meetings')
             ->where('token_qr', $token)
+            ->where('deleted_at', null)
             ->where('expired_at >=', date('Y-m-d H:i:s', time() - 60))
             ->get()
             ->getRowArray();
@@ -149,6 +151,7 @@ class Scan extends BaseController
             // Fallback: lookup by previous token (yang baru di-rotate)
             $meeting = $db->table('meetings')
                 ->where('previous_token_qr', $token)
+                ->where('deleted_at', null)
                 ->where('previous_token_expired_at >=', date('Y-m-d H:i:s', time() - 60))
                 ->get()
                 ->getRowArray();

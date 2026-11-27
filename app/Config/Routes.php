@@ -78,6 +78,12 @@ $routes->group('admin', static function ($routes) {
         $routes->get('settings', 'Admin\Settings::index');
         $routes->post('settings/save', 'Admin\Settings::save');
 
+        // Pengaturan Limitasi Dosen (v10.0)
+        $routes->get('limitations', 'Admin\Limitations::index');
+        $routes->post('limitations/save-default', 'Admin\Limitations::saveDefault');
+        $routes->post('limitations/override/save', 'Admin\Limitations::saveOverride');
+        $routes->post('limitations/override/(:num)/remove', 'Admin\Limitations::removeOverride/$1');
+
         $routes->match(['get', 'post'], 'change-password', 'Admin\Dashboard::changePassword');
 
         // ===================== Modul Quiz (baru) =====================

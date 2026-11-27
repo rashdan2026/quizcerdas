@@ -3,6 +3,7 @@
 namespace App\Controllers\Lecturer;
 
 use App\Controllers\BaseController;
+use App\Libraries\LecturerLimits;
 use App\Models\SubjectModel;
 
 class Subject extends BaseController
@@ -15,13 +16,34 @@ class Subject extends BaseController
             ->orderBy('id', 'DESC')
             ->findAll();
 
-        return view('lecturer/subjects_index', ['subjects' => $subjects]);
+        // Limitasi & pemakaian resource dosen (v10.0).
+        $limits    = new LecturerLimits();
+        $usage     = $limits->forLecturer((int) session('user_id'));
+
+        // Jumlah pertemuan (termasuk yang sudah dihapus) per mata kuliah.
+        $db = db_connect();
+        $meetingCounts = [];
+        if ($subjects) {
+            $ids = array_map(static fn ($s) => (int) $s['id'], $subjects);
+            $rows = $db->query(
+                'SELECT subject_id, COUNT(*) AS n FROM meetings WHERE subject_id IN (' . implode(',', $ids) . ') GROUP BY subject_id'
+            )->getResultArray();
+            foreach ($rows as $r) {
+                $meetingCounts[(int) $r['subject_id']] = (int) $r['n'];
+            }
+        }
+
+        return view('lecturer/subjects_index', [
+            'subjects'      => $subjects,
+            'usage'         => $usage,
+            'meetingCounts' => $meetingCounts,
+        ]);
     }
 
     public function create()
     {
         if ($this->request->getMethod() !== 'POST') {
-            return view('lecturer/subject_form');
+            return view('lecturer/subject_form', ['usage' => (new LecturerLimits())->forLecturer((int) session('user_id'))]);
         }
 
         $kodeMk = strtoupper(trim((string) $this->request->getPost('kode_mk')));
@@ -29,6 +51,12 @@ class Subject extends BaseController
 
         if ($kodeMk === '' || $namaMk === '') {
             return redirect()->back()->withInput()->with('error', 'Kode MK dan nama MK wajib diisi.');
+        }
+
+        // Limitasi backend: maksimal mata kuliah per dosen.
+        $limitCheck = (new LecturerLimits())->checkSubject((int) session('user_id'));
+        if (! $limitCheck['ok']) {
+            return redirect()->back()->withInput()->with('error', $limitCheck['message']);
         }
 
         $subjectModel = new SubjectModel();
@@ -39,7 +67,7 @@ class Subject extends BaseController
             'dosen_id'  => session('user_id'),
         ]);
 
-        return redirect()->to('/lecturer/subjects')->with('success', 'Matakuliah berhasil ditambahkan.');
+        return redirect()->to('/lecturer/subjects')->with('success', 'Matakuliah berhasil ditambahkan. (' . ($limitCheck['used'] + 1) . ' dari ' . $limitCheck['limit'] . ' mata kuliah)');
     }
 
     public function toggle(int $id)

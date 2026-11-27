@@ -42,12 +42,24 @@
 
                 <div class="text-center">
                     <p class="text-muted small mb-2">Tidak menerima kode?</p>
-                    <form action="<?= base_url('/register/resend-otp') ?>" method="post" class="d-inline">
-                        <?= csrf_field() ?>
-                        <button type="submit" class="btn btn-outline-secondary btn-sm">
-                            <i class="bi bi-arrow-clockwise me-1"></i>Kirim Ulang
+                    <?php if (! empty($resend['exhausted'])): ?>
+                        <div class="alert alert-warning py-2 small mb-2">
+                            Anda telah mencapai batas pengiriman ulang email hari ini. Silakan coba kembali besok.
+                        </div>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" disabled>
+                            <i class="bi bi-arrow-clockwise me-1"></i>Kirim Ulang Email
                         </button>
-                    </form>
+                    <?php else: ?>
+                        <form action="<?= base_url('/register/resend-otp') ?>" method="post" class="d-inline" id="resendForm">
+                            <?= csrf_field() ?>
+                            <button type="submit" class="btn btn-outline-secondary btn-sm" id="btnResend"
+                                <?= empty($resend['allowed']) ? 'disabled' : '' ?>
+                                data-wait="<?= (int) ($resend['wait_seconds'] ?? 0) ?>">
+                                <i class="bi bi-arrow-clockwise me-1"></i><span id="resendLabel">Kirim Ulang Email<?= ! empty($resend['wait_seconds']) ? ' (' . gmdate('i:s', (int) $resend['wait_seconds']) . ')' : '' ?></span>
+                            </button>
+                        </form>
+                        <small class="text-muted d-block mt-1">Sisa kirim ulang hari ini: <?= (int) ($resend['remaining_today'] ?? 4) ?>x</small>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -61,6 +73,7 @@
 </div>
 <?= $this->endSection() ?>
 <?= $this->section('scripts') ?>
+<script src="<?= base_url('/assets/js/resend-countdown.js') ?>"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const otpField = document.getElementById('otpField');
@@ -69,6 +82,9 @@ document.addEventListener('DOMContentLoaded', function() {
         otpField.addEventListener('input', function(e) {
             this.value = this.value.replace(/\D/g, '').slice(0, 6);
         });
+    }
+    if (window.kmResendCountdown && document.getElementById('btnResend')) {
+        window.kmResendCountdown('btnResend', 'resendLabel');
     }
 });
 </script>

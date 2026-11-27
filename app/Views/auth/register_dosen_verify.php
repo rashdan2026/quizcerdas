@@ -45,16 +45,22 @@
 
                 <hr class="my-3" style="border-color:#E2E8F0;">
                 <div class="text-center">
-                    <?php
-                        $canResend = empty($resend_at) || strtotime($resend_at) <= time();
-                        $waitSec   = $canResend ? 0 : max(0, strtotime($resend_at) - time());
-                    ?>
-                    <button type="button" id="btnResend" class="btn btn-outline-secondary btn-sm" <?= $canResend ? '' : 'disabled' ?> onclick="resendCode()">
-                        <i class="bi bi-arrow-clockwise me-1"></i>Kirim Ulang Kode
-                    </button>
-                    <small class="text-muted d-block mt-1" id="resendInfo">
-                        <?= $canResend ? '' : 'Tunggu ' . $waitSec . ' detik lagi untuk meminta kode baru.' ?>
-                    </small>
+                    <?php if (! empty($resend['exhausted'])): ?>
+                        <div class="alert alert-warning py-2 small mb-2">
+                            Anda telah mencapai batas pengiriman ulang email hari ini. Silakan coba kembali besok.
+                        </div>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" disabled>
+                            <i class="bi bi-arrow-clockwise me-1"></i>Kirim Ulang Email
+                        </button>
+                    <?php else: ?>
+                        <button type="button" id="btnResend" class="btn btn-outline-secondary btn-sm"
+                            <?= empty($resend['allowed']) ? 'disabled' : '' ?>
+                            data-wait="<?= (int) ($resend['wait_seconds'] ?? 0) ?>"
+                            onclick="resendCode()">
+                            <i class="bi bi-arrow-clockwise me-1"></i><span id="resendLabel">Kirim Ulang Email<?= ! empty($resend['wait_seconds']) ? ' (' . gmdate('i:s', (int) $resend['wait_seconds']) . ')' : '' ?></span>
+                        </button>
+                        <small class="text-muted d-block mt-1">Sisa kirim ulang hari ini: <?= (int) ($resend['remaining_today'] ?? 4) ?>x</small>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -67,6 +73,7 @@
 </div>
 <?= $this->endSection() ?>
 <?= $this->section('scripts') ?>
+<script src="<?= base_url('/assets/js/resend-countdown.js') ?>"></script>
 <script>
 function resendCode() {
     var form = document.createElement('form');
@@ -84,5 +91,10 @@ function resendCode() {
     document.body.appendChild(form);
     form.submit();
 }
+document.addEventListener('DOMContentLoaded', function () {
+    if (window.kmResendCountdown && document.getElementById('btnResend')) {
+        window.kmResendCountdown('btnResend', 'resendLabel');
+    }
+});
 </script>
 <?= $this->endSection() ?>

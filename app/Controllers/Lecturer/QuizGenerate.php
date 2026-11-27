@@ -105,12 +105,17 @@ class QuizGenerate extends BaseController
         $result = $this->runGuarded($batchId, $instruction);
 
         if ($isAjax) {
-            return $this->json(['ok' => $result['ok']] + $this->batchPayload($this->batchModel->find($batchId)));
+            $payload = ['ok' => $result['ok']];
+            if (($created['note'] ?? '') !== '') {
+                $payload['note'] = $created['note'];
+            }
+
+            return $this->json($payload + $this->batchPayload($this->batchModel->find($batchId)));
         }
 
         return redirect()->to('/lecturer/quiz/' . $quizId)->with(
             $result['ok'] ? ($result['status'] === 'completed' ? 'success' : 'warning') : 'error',
-            $result['message']
+            trim(($created['note'] ?? '') !== '' ? $created['note'] . ' ' : '') . $result['message']
         );
     }
 
@@ -265,10 +270,13 @@ class QuizGenerate extends BaseController
         $db       = db_connect();
         $rejected = null;
         $batchId  = 0;
+        $clampNote = null;
 
         $db->transBegin();
-        // Kunci baris kuis agar pengecekan kapasitas & batch aktif aman terhadap request bersamaan.
+        // Kunci baris kuis + dosen agar pengecekan kapasitas kuis, kuota AI
+        // mingguan, dan batch aktif aman terhadap request bersamaan.
         $db->query('SELECT id FROM quiz_quizzes WHERE id = ? FOR UPDATE', [$quizId]);
+        $db->query('SELECT id FROM lecturers WHERE id = ? FOR UPDATE', [$this->lid()]);
         $existing = (int) (new QuizQuestionModel())->where('quiz_id', $quizId)->where('is_active', 1)->countAllResults();
 
         if ($existing >= QuestionGenerationService::MAX_QUESTIONS_PER_QUIZ) {
@@ -278,25 +286,41 @@ class QuizGenerate extends BaseController
         } elseif (($active = $this->batchModel->activeForQuiz($quizId)) !== null) {
             $rejected = $this->inFlightMessage($active);
         } else {
-            $batchId = (int) $this->batchModel->insert([
-                'quiz_id'              => $quizId,
-                'lecturer_id'          => $this->lid(),
-                'source_type'          => 'ai_pdf',
-                'original_filename'    => $clientName,
-                'file_size_bytes'      => (int) filesize($pdfPath),
-                'file_sha256'          => $sha256,
-                'source_title'         => trim((string) $this->request->getPost('source_title')) ?: null,
-                'requested_count'      => $count,
-                'difficulty_easy_pct'  => $easy,
-                'difficulty_medium_pct'=> $medium,
-                'difficulty_hard_pct'  => $hard,
-                'status'               => 'quarantine', // karantina sampai scan bersih
-                'pdf_path'             => $pdfPath,
-                'uploaded_at'          => $now,
-                'expires_at'           => date('Y-m-d H:i:s', strtotime($now . ' +7 days')),
-                'created_at'           => $now,
-                'updated_at'           => $now,
-            ], true);
+            // Kuota Generate AI mingguan (per dosen): soal tersimpan + reservasi
+            // batch berjalan. Ditolak bila kuota habis; disesuaikan bila sisa
+            // kuota lebih kecil dari permintaan. TIDAK memanggil API AI bila
+            // kuota tidak tersedia.
+            $quota = (new \App\Libraries\LecturerLimits())->reserveAiWithinTransaction($this->lid(), $count);
+            if (! $quota['ok']) {
+                $rejected = $quota['message'];
+            } else {
+                if ($quota['requested'] < $count) {
+                    $clampNote = $quota['message'];
+                }
+                $count = $quota['requested'];
+            }
+
+            if ($rejected === null) {
+                $batchId = (int) $this->batchModel->insert([
+                    'quiz_id'              => $quizId,
+                    'lecturer_id'          => $this->lid(),
+                    'source_type'          => 'ai_pdf',
+                    'original_filename'    => $clientName,
+                    'file_size_bytes'      => (int) filesize($pdfPath),
+                    'file_sha256'          => $sha256,
+                    'source_title'         => trim((string) $this->request->getPost('source_title')) ?: null,
+                    'requested_count'      => $count,
+                    'difficulty_easy_pct'  => $easy,
+                    'difficulty_medium_pct'=> $medium,
+                    'difficulty_hard_pct'  => $hard,
+                    'status'               => 'quarantine', // karantina sampai scan bersih
+                    'pdf_path'             => $pdfPath,
+                    'uploaded_at'          => $now,
+                    'expires_at'           => date('Y-m-d H:i:s', strtotime($now . ' +7 days')),
+                    'created_at'           => $now,
+                    'updated_at'           => $now,
+                ], true);
+            }
         }
 
         if ($rejected === null && $batchId > 0) {
@@ -379,7 +403,7 @@ class QuizGenerate extends BaseController
             'updated_at'     => date('Y-m-d H:i:s'),
         ]);
 
-        return ['ok' => true, 'batch_id' => $batchId, 'instruction' => $instruction];
+        return ['ok' => true, 'batch_id' => $batchId, 'instruction' => $instruction, 'note' => $clampNote];
     }
 
     /**

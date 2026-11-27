@@ -3,6 +3,7 @@
 namespace App\Controllers\Lecturer;
 
 use App\Controllers\BaseController;
+use App\Libraries\LecturerLimits;
 use App\Models\MeetingLinkModel;
 use App\Models\MeetingModel;
 use App\Models\SubjectModel;
@@ -31,6 +32,7 @@ class Meeting extends BaseController
             ->join('attendance a', 'a.meeting_id = m.id', 'left')
             ->where('s.dosen_id', session('user_id'))
             ->where('s.is_active', 1)
+            ->where('m.deleted_at', null)
             ->groupBy('m.id')
             ->orderBy('m.id', 'DESC')
             ->get()
@@ -48,6 +50,15 @@ class Meeting extends BaseController
             ->orderBy('kode_mk', 'ASC')
             ->findAll();
 
+        // Limitasi pertemuan per mata kuliah (v10.0) — termasuk pertemuan
+        // yang pernah dihapus (soft delete) agar tidak bisa diakali.
+        $limits      = new LecturerLimits();
+        $meetingLim  = $limits->forLecturer((int) session('user_id'))['limits']['meetings'];
+        $meetingCounts = [];
+        foreach ($subjects as $s) {
+            $meetingCounts[(int) $s['id']] = $limits->meetingCount((int) $s['id']);
+        }
+
         // Daftar PDF yang tersedia
         $pdfFiles = db_connect()->table('pdf_files')
             ->where('dosen_id', session('user_id'))
@@ -56,7 +67,12 @@ class Meeting extends BaseController
             ->getResultArray();
 
         if ($this->request->getMethod() !== 'POST') {
-            return view('lecturer/meeting_form', ['subjects' => $subjects, 'pdfFiles' => $pdfFiles]);
+            return view('lecturer/meeting_form', [
+                'subjects'      => $subjects,
+                'pdfFiles'      => $pdfFiles,
+                'meetingLimit'  => $meetingLim,
+                'meetingCounts' => $meetingCounts,
+            ]);
         }
 
         $subjectId = (int) $this->request->getPost('subject_id');
@@ -68,6 +84,12 @@ class Meeting extends BaseController
 
         if (! $subject) {
             return redirect()->back()->withInput()->with('error', 'Matakuliah aktif tidak ditemukan.');
+        }
+
+        // Limitasi backend: maksimal pertemuan per mata kuliah.
+        $limitCheck = $limits->checkMeeting($subjectId, (int) session('user_id'));
+        if (! $limitCheck['ok']) {
+            return redirect()->back()->withInput()->with('error', $limitCheck['message']);
         }
 
         $judul     = trim((string) $this->request->getPost('judul'));
@@ -87,7 +109,15 @@ class Meeting extends BaseController
         }
 
         $meetingModel = new MeetingModel();
-        $pertemuanKe  = $meetingModel->where('subject_id', $subjectId)->countAllResults() + 1;
+        // Nomor pertemuan: lanjut dari nomor TERTINGGI (termasuk yang sudah
+        // dihapus) agar unique key (subject_id, pertemuan_ke) tidak bentrok.
+        $db = db_connect();
+        $maxKe = $db->table('meetings')
+            ->select('COALESCE(MAX(pertemuan_ke), 0) AS max_ke')
+            ->where('subject_id', $subjectId)
+            ->get()
+            ->getRowArray()['max_ke'] ?? 0;
+        $pertemuanKe  = (int) $maxKe + 1;
         $token        = $this->newToken();
         $expiredAt    = $this->newExpiry();
 
@@ -105,8 +135,9 @@ class Meeting extends BaseController
         // Simpan link referensi (maks 3)
         $linkError = $this->saveLinks($meetingId, $this->request->getPost('links'));
         if ($linkError !== null) {
-            // Rollback meeting jika link invalid
-            $meetingModel->delete($meetingId);
+            // Rollback meeting jika link invalid (HARD delete: pembuatan gagal
+            // tidak boleh menghabiskan kuota pertemuan).
+            $meetingModel->delete($meetingId, true);
             return redirect()->back()->withInput()->with('error', $linkError);
         }
 
@@ -249,9 +280,11 @@ class Meeting extends BaseController
         }
 
         $meetingModel = new MeetingModel();
+        // Soft delete: pertemuan tidak tampil lagi, tetapi tetap terhitung
+        // dalam limit pembuatan pertemuan per mata kuliah (anti-abuse).
         $meetingModel->delete($id);
 
-        return redirect()->to('/lecturer/meetings')->with('success', 'Pertemuan berhasil dihapus.');
+        return redirect()->to('/lecturer/meetings')->with('success', 'Pertemuan berhasil dihapus. Jumlah pertemuan yang pernah dibuat tetap terhitung dalam kuota mata kuliah.');
     }
 
     private function findOwnedMeeting(int $id): ?array
@@ -263,6 +296,7 @@ class Meeting extends BaseController
             ->join('subjects s', 's.id = m.subject_id')
             ->join('lecturers l', 'l.id = s.dosen_id')
             ->where('m.id', $id)
+            ->where('m.deleted_at', null)
             ->where('s.dosen_id', session('user_id'))
             ->get()
             ->getRowArray();

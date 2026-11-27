@@ -97,6 +97,9 @@
             $defaultCount = 10;
         }
         $formLocked = $capacity < 5 || $activeBatch !== null;
+        $aiQuota    = $aiQuota ?? ['used' => ['ai' => 0], 'limits' => ['ai' => 0], 'remaining' => ['ai' => 0]];
+        $aiRemaining = max(0, (int) $aiQuota['remaining']['ai']);
+        $formLocked  = $formLocked || $aiRemaining === 0;
         ?>
         <form id="genForm" method="post" action="<?= base_url('/lecturer/quiz/' . $quiz['id'] . '/generate') ?>" enctype="multipart/form-data" class="row g-3">
             <?= csrf_field() ?>
@@ -142,6 +145,10 @@
             </div>
             <div class="col-12">
                 <div class="form-text mb-1" id="allocPreview"></div>
+                <div class="form-text mb-1">
+                    Kuota Generate AI minggu ini: <strong><?= (int) $aiQuota['used']['ai'] ?> / <?= (int) $aiQuota['limits']['ai'] ?> soal</strong>
+                    &middot; Sisa: <strong><?= (int) $aiRemaining ?> soal</strong> (reset Senin 00.00 WIB).
+                </div>
                 <div class="form-text mb-2">
                     Bank soal: <strong><?= (int) $stats['total'] ?> / <?= (int) $maxQuestions ?></strong> &middot;
                     Sisa kapasitas: <strong><?= (int) $capacity ?> soal</strong>.
@@ -149,6 +156,11 @@
                         Pilihan di atas sisa kapasitas dinonaktifkan.
                     <?php endif; ?>
                 </div>
+                <?php if ($aiRemaining === 0): ?>
+                    <div class="alert alert-danger small py-2 mb-2">
+                        <i class="bi bi-exclamation-octagon me-1"></i>Kuota Generate AI minggu ini telah mencapai batas maksimal. Kuota akan diperbarui pada hari Senin pukul 00.00 WIB.
+                    </div>
+                <?php endif; ?>
                 <?php if ($capacity < 5): ?>
                     <div class="alert alert-warning small py-2 mb-2">
                         <i class="bi bi-exclamation-triangle me-1"></i>Kapasitas soal tinggal <?= (int) $capacity ?> (kurang dari 5). Hapus beberapa soal terlebih dahulu sebelum generate lagi.

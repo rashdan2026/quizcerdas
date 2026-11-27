@@ -38,12 +38,18 @@
                         <label class="form-label">Matakuliah Aktif</label>
                         <select name="subject_id" class="form-select" required>
                             <option value="">Pilih Matakuliah</option>
+                            <?php
+                                $meetingLimit   = $meetingLimit ?? 20;
+                                $meetingCounts  = $meetingCounts ?? [];
+                            ?>
                             <?php foreach ($subjects as $subject): ?>
-                                <option value="<?= $subject['id'] ?>" <?= old('subject_id') == $subject['id'] ? 'selected' : '' ?>>
-                                    <?= esc($subject['kode_mk']) ?> - <?= esc($subject['nama_mk']) ?>
+                                <?php $mUsed = $meetingCounts[(int) $subject['id']] ?? 0; $mFull = $mUsed >= $meetingLimit; ?>
+                                <option value="<?= $subject['id'] ?>" <?= old('subject_id') == $subject['id'] ? 'selected' : '' ?> <?= $mFull ? 'disabled' : '' ?>>
+                                    <?= esc($subject['kode_mk']) ?> - <?= esc($subject['nama_mk']) ?> (Pertemuan: <?= (int) $mUsed ?>/<?= (int) $meetingLimit ?><?= $mFull ? ' — penuh' : '' ?>)
                                 </option>
                             <?php endforeach; ?>
                         </select>
+                        <div class="form-text">Maksimal <?= (int) $meetingLimit ?> pertemuan per mata kuliah (termasuk pertemuan yang pernah dihapus). Mata kuliah penuh tidak dapat dipilih.</div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Judul Pertemuan</label>

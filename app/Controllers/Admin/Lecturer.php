@@ -87,6 +87,8 @@ class Lecturer extends BaseController
         if (! isset($payload['password'])) {
             $payload['password'] = password_hash('password123', PASSWORD_BCRYPT);
         }
+        // Snapshot limitasi default yang berlaku saat akun dibuat (v10.0).
+        $payload += (new \App\Libraries\LecturerLimits())->snapshotForNewLecturer();
         $this->model->insert($payload);
         return redirect()->to('/admin/lecturers')->with('success', 'Dosen baru ditambahkan. Password default: password123');
     }
