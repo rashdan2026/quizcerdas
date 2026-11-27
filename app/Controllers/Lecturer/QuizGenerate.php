@@ -172,12 +172,23 @@ class QuizGenerate extends BaseController
             return ['ok' => false, 'error' => 'empty_file', 'message' => 'File kosong.'];
         }
 
-        // MIME/content sebenarnya, bukan nama file
-        $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($file->getTempName());
-        if ($mime !== 'application/pdf') {
-            return ['ok' => false, 'error' => 'not_pdf', 'message' => 'File harus berupa PDF valid.'];
+        // Validasi PDF: andalkan magic bytes %PDF- (spec mengizinkan header di
+        // 1024 byte pertama). finfo hanya pelengkap — di sebagian shared hosting
+        // magic database finfo tidak lengkap sehingga PDF valid terdeteksi
+        // salah (application/octet-stream) dan menolak file yang sebenarnya sah.
+        $tmpPath  = $file->getTempName();
+        $head     = (string) file_get_contents($tmpPath, false, null, 0, 1024);
+        $isPdf    = str_contains($head, '%PDF-');
+        $mime     = null;
+        if (! $isPdf) {
+            try {
+                $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($tmpPath);
+            } catch (\Throwable $e) {
+                $mime = null;
+            }
+            $isPdf = ($mime === 'application/pdf');
         }
-        if (substr((string) file_get_contents($file->getTempName(), false, null, 0, 5), 0, 5) !== '%PDF-') {
+        if (! $isPdf) {
             return ['ok' => false, 'error' => 'not_pdf', 'message' => 'File harus berupa PDF valid.'];
         }
 
