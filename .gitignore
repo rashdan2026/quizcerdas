@@ -55,7 +55,11 @@ system/ThirdParty/*/README*.md
 system/ThirdParty/*/CHANGELOG*.md
 
 # Composer
-vendor/
+# Composer vendor: ikut di-commit agar production (Hostinger) tidak perlu
+# menjalankan composer install. Paket dev sudah dihapus dari composer.json,
+# jadi vendor/ hanya berisi dependensi production (~0.6 MB).
+!vendor/
+!vendor/**
 # Pengecualian: aset vendor FRONTEND (Quill, Highlight.js) harus ikut di-deploy
 !public/assets/vendor/
 !public/assets/vendor/**
