@@ -366,7 +366,8 @@
         if (!host) {
             host = document.createElement('div');
             host.id = 'ajaxToastHost';
-            host.style.cssText = 'position:fixed;top:70px;right:16px;z-index:2000;display:flex;flex-direction:column;gap:8px;max-width:340px;';
+            // Posisi TENGAH layar agar pasti terlihat dosen.
+            host.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2100;display:flex;flex-direction:column;gap:10px;align-items:center;pointer-events:none;';
             document.body.appendChild(host);
         }
         return host;
@@ -375,15 +376,17 @@
         var colors = { success: ['#F0FDF4', '#166534', '#22C55E'], danger: ['#FFF1F2', '#BE123C', '#EF4444'] };
         var c = colors[kind] || colors.danger;
         var el = document.createElement('div');
-        el.className = 'alert mb-0 shadow-sm';
+        el.className = 'alert mb-0 shadow-lg';
         el.setAttribute('role', 'alert');
-        el.style.cssText = 'background:' + c[0] + ';color:' + c[1] + ';border-left:4px solid ' + c[2] + ';font-size:.86rem;';
+        el.style.cssText = 'background:' + c[0] + ';color:' + c[1] + ';border-left:4px solid ' + c[2]
+            + ';font-size:1rem;font-weight:600;padding:.9rem 1.4rem;border-radius:10px;'
+            + 'box-shadow:0 8px 30px rgba(0,0,0,.25);pointer-events:auto;max-width:420px;text-align:center;';
         el.textContent = message;
         ensureToastHost().appendChild(el);
         setTimeout(function () {
             el.style.transition = 'opacity .4s'; el.style.opacity = '0';
             setTimeout(function () { el.remove(); }, 400);
-        }, 4000);
+        }, 3000);
     }
 
     function setBusy(form, btn, busy) {
