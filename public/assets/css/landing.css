@@ -347,7 +347,7 @@ body.km-landing {
 .km-price-badge svg { width: 13px; height: 13px; }
 .km-price-top h3 { font-size: 1.35rem; margin: 0 0 8px; }
 .km-price-top p { color: var(--km-muted); margin: 0 auto; max-width: 60ch; font-size: .92rem; }
-.km-price-list { padding: 26px 34px 32px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 26px; }
+.km-landing .km-price-list { padding: 28px 44px 32px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 26px; }
 .km-price-list li { list-style: none; display: flex; gap: 10px; font-size: .9rem; color: var(--km-slate); align-items: flex-start; }
 .km-price-list li svg { width: 17px; height: 17px; color: var(--km-green); flex-shrink: 0; margin-top: 2px; }
 .km-price-foot { text-align: center; padding: 0 34px 30px; }
@@ -485,7 +485,8 @@ body.km-landing {
     .km-stats { grid-template-columns: repeat(3, 1fr); }
     .km-stat { padding: 8px; }
     .km-stat b { font-size: .92rem; }
-    .km-price-top, .km-price-list { padding-left: 20px; padding-right: 20px; }
+    .km-price-top { padding-left: 20px; padding-right: 20px; }
+    .km-landing .km-price-list { padding-left: 22px; padding-right: 22px; }
     .km-price-foot { padding-left: 20px; padding-right: 20px; }
     .km-flow { padding: 22px; }
     .km-final { padding: 56px 0; }

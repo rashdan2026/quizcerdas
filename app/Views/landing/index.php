@@ -441,7 +441,6 @@ $base = rtrim(base_url(), '/');
 <section class="km-section alt" id="biaya">
     <div class="km-container">
         <div class="km-section-head">
-            <span class="km-kicker">Model Penggunaan</span>
             <span class="km-kicker">Informasi Layanan</span>
             <h2>Gunakan Fitur KelasMerdeka Tanpa Beban Langganan.</h2>
             <p>Mulai gunakan berbagai fitur KelasMerdeka tanpa biaya berlangganan saat ini. Nikmati kemudahan pengelolaan pembelajaran melalui fitur yang tersedia, tanpa biaya langganan bulanan.</p>
