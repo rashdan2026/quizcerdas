@@ -30,6 +30,8 @@ $routes->post('register/dosen/resend', 'DosenRegistration::resendCode');
 $routes->match(['get', 'post'], 'auth/otp', 'Auth::otp');
 $routes->match(['get', 'post'], 'auth/change-password', 'Auth::changePassword');
 $routes->match(['get', 'post'], 'auth/forgot-password', 'Auth::forgotPassword');
+$routes->get('reset-password/berhasil', 'Auth::resetPasswordSuccess');
+$routes->match(['get', 'post'], 'reset-password/(:segment)', 'Auth::resetPassword/$1');
 $routes->get('logout', 'Auth::logout');
 
 $routes->get('media/gfx/(:any)', 'AdImage::serve/$1');
@@ -83,6 +85,10 @@ $routes->group('admin', static function ($routes) {
         $routes->post('limitations/save-default', 'Admin\Limitations::saveDefault');
         $routes->post('limitations/override/save', 'Admin\Limitations::saveOverride');
         $routes->post('limitations/override/(:num)/remove', 'Admin\Limitations::removeOverride/$1');
+
+        // Pengaturan Keamanan Email — reset password (v11.0)
+        $routes->get('password-reset-settings', 'Admin\PasswordReset::index');
+        $routes->post('password-reset-settings/save', 'Admin\PasswordReset::save');
 
         $routes->match(['get', 'post'], 'change-password', 'Admin\Dashboard::changePassword');
 

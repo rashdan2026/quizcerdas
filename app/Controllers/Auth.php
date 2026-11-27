@@ -322,71 +322,117 @@ class Auth extends BaseController
                 : redirect()->to('/student/dashboard');
         }
 
-        // Only generate captcha on GET request
-        if ($this->request->getMethod() !== 'POST') {
-            $captcha = $this->generateCaptcha();
-            return view('auth/forgot_password', ['captcha' => $captcha]);
-        }
-
-        // POST request - validate without regenerating captcha first
-        $email   = trim((string) $this->request->getPost('email'));
-        $captcha = strtoupper(trim((string) $this->request->getPost('captcha')));
+        $service = new \App\Libraries\PasswordResetService();
         $session = session();
 
-        // Validate captcha FIRST
+        // GET: tampilkan form + state countdown (dari email yang terakhir diminta).
+        if ($this->request->getMethod() !== 'POST') {
+            $captcha = $this->generateCaptcha();
+            $lastEmail = (string) ($session->get('pwdreset_email') ?? '');
+
+            return view('auth/forgot_password', [
+                'captcha'    => $captcha,
+                'resetState' => $lastEmail !== '' ? $service->state($lastEmail) : null,
+                'resetEmail' => $lastEmail,
+            ]);
+        }
+
+        $email   = strtolower(trim((string) $this->request->getPost('email')));
+        $captcha = strtoupper(trim((string) $this->request->getPost('captcha')));
+
+        // Validasi captcha tetap dipertahankan (anti-bot).
         if ($captcha !== $session->get('captcha_code')) {
-            $this->generateCaptcha(); // Generate new captcha after failed attempt
+            $this->generateCaptcha();
+
             return redirect()->back()->withInput()->with('error', 'Captcha tidak sesuai.');
         }
 
-        // Check if email exists in students or lecturers table
-        $studentModel = new StudentModel();
-        $student = $studentModel->find($email);
-
-        $lecturerModel = new LecturerModel();
-        $lecturer = $lecturerModel->where('email', $email)->first();
-
-        if (!$student && !$lecturer) {
+        if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $this->generateCaptcha();
-            return redirect()->back()->withInput()->with('error', 'Email tidak ditemukan.');
+
+            return redirect()->back()->withInput()->with('error', 'Format email tidak valid.');
         }
 
-        // Generate random password
-        $newPassword = substr(str_shuffle('ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#$'), 0, 10);
-        $hashedPassword = password_hash($newPassword, PASSWORD_BCRYPT);
-
-        // Update password in database
-        if ($student) {
-            $studentModel->update($email, ['password' => $hashedPassword]);
-            $name = $student['nama'];
-        } else {
-            $lecturerModel->update($lecturer['id'], ['password' => $hashedPassword]);
-            $name = $lecturer['nama'];
-        }
-
-        // Send email with new password
-        $mailResult = $this->sendPasswordResetEmail($email, $name, $newPassword);
-
-        if (!$mailResult['ok']) {
-            $this->generateCaptcha();
-            return redirect()->back()->withInput()->with('error', 'Gagal mengirim email: ' . $mailResult['message']);
-        }
-
+        // Password lama TIDAK diubah di sini — hanya menerbitkan token + kirim link.
+        $result = $service->request($email, (string) $this->request->getIPAddress());
         $this->generateCaptcha();
-        return redirect()->to('/auth')->with('success', 'Password baru telah dikirim ke email Anda. Silakan cek inbox.');
+
+        if ($result['status'] === 'sent') {
+            // Pesan publik SAMA untuk email terdaftar maupun tidak (anti-enumerasi).
+            $session->set('pwdreset_email', $email);
+
+            return redirect()->to('/auth/forgot-password')->with('success',
+                'Jika alamat email terdaftar di ' . app_name() . ', instruksi pengaturan ulang password akan dikirimkan. Silakan periksa Inbox atau folder Spam.');
+        }
+
+        if ($result['status'] === 'cooldown') {
+            $session->set('pwdreset_email', $email);
+
+            return redirect()->to('/auth/forgot-password')->with('error', $result['message']);
+        }
+
+        if ($result['status'] === 'limit') {
+            $session->set('pwdreset_email', $email);
+
+            return redirect()->to('/auth/forgot-password')->with('error',
+                'Anda telah mencapai batas permintaan reset password. Silakan coba kembali setelah ' . max(1, (int) ceil($result['wait_seconds'] / 60)) . ' menit.');
+        }
+
+        return redirect()->back()->withInput()->with('error', $result['message'] ?: 'Permintaan tidak dapat diproses.');
     }
 
-    private function sendPasswordResetEmail(string $to, string $name, string $newPassword): array
+    /** Form password baru dari link reset (GET) & simpan (POST). */
+    public function resetPassword(?string $token = null)
     {
-        $subject = 'Reset Password - ' . app_name();
-        $body = "Halo {$name},\n\n"
-              . "Password Anda telah direset.\n\n"
-              . "Password baru: {$newPassword}\n\n"
-              . "Silakan login dengan password baru tersebut.\n"
-              . "Kami sarankan untuk segera mengubah password setelah login.\n\n"
-              . "Jika Anda tidak meminta reset password ini, silakan hubungi administrator.";
+        if (session('logged_in')) {
+            session()->remove(['logged_in', 'role', 'user_id', 'user_name', 'profile_confirmed']);
+        }
 
-        return (new MailService())->send($to, $subject, nl2br(htmlspecialchars($body, ENT_QUOTES, 'UTF-8')), $body);
+        $token   = (string) ($token ?? '');
+        $service = new \App\Libraries\PasswordResetService();
+
+        $check = $service->validateToken($token);
+        if (! $check['ok']) {
+            return $this->response->setStatusCode(200)->setBody(view('auth/reset_password_invalid', [
+                'reason' => $check['reason'] ?? 'invalid',
+            ]));
+        }
+
+        if ($this->request->getMethod() !== 'POST') {
+            return view('auth/reset_password', [
+                'token'        => $token,
+                'email'        => $check['account']['email'],
+                'seconds_left' => (int) $check['seconds_left'],
+            ]);
+        }
+
+        $password = (string) $this->request->getPost('password');
+        $confirm  = (string) $this->request->getPost('password_confirm');
+
+        // Kebijakan sama dengan registrasi/perubahan password: minimal 8 karakter.
+        if (strlen($password) < 8) {
+            return redirect()->back()->withInput()->with('error', 'Password baru minimal 8 karakter.');
+        }
+        if ($password !== $confirm) {
+            return redirect()->back()->withInput()->with('error', 'Konfirmasi password tidak sama.');
+        }
+
+        $result = $service->completeReset($token, $password, (string) $this->request->getIPAddress());
+
+        if (! $result['ok']) {
+            return $this->response->setStatusCode(200)->setBody(view('auth/reset_password_invalid', [
+                'reason' => $result['reason'] ?? 'invalid',
+            ]));
+        }
+
+        return redirect()->to('/reset-password/berhasil')
+            ->with('reset_success', true);
+    }
+
+    /** Halaman berhasil setelah password diperbarui. */
+    public function resetPasswordSuccess()
+    {
+        return view('auth/reset_password_success');
     }
 
     public function logout()

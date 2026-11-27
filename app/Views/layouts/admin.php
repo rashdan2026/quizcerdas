@@ -264,6 +264,9 @@
     <a class="nav-link <?= str_starts_with(uri_string(), 'admin/limitations') ? 'active' : '' ?>" href="<?= base_url('/admin/limitations') ?>">
         <i class="bi bi-speedometer2"></i> Limitasi Dosen
     </a>
+    <a class="nav-link <?= str_starts_with(uri_string(), 'admin/password-reset-settings') ? 'active' : '' ?>" href="<?= base_url('/admin/password-reset-settings') ?>">
+        <i class="bi bi-shield-lock"></i> Keamanan Email
+    </a>
     <a class="nav-link <?= str_starts_with(uri_string(), 'admin/quiz-ai') ? 'active' : '' ?>" href="<?= base_url('/admin/quiz-ai') ?>">
         <i class="bi bi-cpu"></i> Pengaturan AI
     </a>
