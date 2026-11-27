@@ -85,7 +85,10 @@
 
     function initEditor(textarea) {
         if (textarea.dataset.qeReady) return;
-        if (typeof Quill === 'undefined') return; // aset belum termuat
+        if (typeof Quill === 'undefined') {
+            console.error('QuizEditor: Quill.js tidak termuat.');
+            return;
+        }
         textarea.dataset.qeReady = '1';
 
         var wrap = document.createElement('div');
@@ -97,6 +100,7 @@
         textarea.parentNode.insertBefore(wrap, textarea);
         wrap.appendChild(editorDiv);
 
+        try {
         var quill = new Quill(editorDiv, {
             theme: 'snow',
             modules: {
@@ -109,8 +113,7 @@
                         'table-row-add': function () { tableAction(quill, 'row+'); },
                         'table-col-add': function () { tableAction(quill, 'col+'); }
                     }
-                },
-                keyboard: { bindings: { 'code exit': null } }
+                }
             }
         });
 
@@ -171,6 +174,13 @@
                 b.textContent = name === 'table-insert' ? 'Tabel' : (name === 'table-row' ? '− Baris' : '− Kolom');
             }
         });
+        } catch (err) {
+            // Fallback aman: kembalikan textarea (isi soal tetap bisa diedit &
+            // disimpan) — jangan sampai HTML mentah menjadi satu-satunya tampilan.
+            console.error('QuizEditor: gagal inisialisasi Quill —', err);
+            wrap.remove();
+            textarea.classList.remove('d-none');
+        }
     }
 
     function initAll(root) {
