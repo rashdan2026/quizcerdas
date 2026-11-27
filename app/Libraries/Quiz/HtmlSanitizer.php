@@ -51,7 +51,8 @@ final class HtmlSanitizer
     /** Nilai CSS yang mencurigakan (ditolak). */
     private const CSS_FORBIDDEN = ['url(', 'expression', 'behavior', 'javascript', '@import', 'vbscript', '<', '>', '"', "'"];
 
-    private const CSS_VALUE_RE = '/^[#0-9a-zA-Z ,.%\-]+$/';
+    // Kurung diperbolehkan untuk nilai warna rgb()/rgba(); url() tetap diblokir blacklist.
+    private const CSS_VALUE_RE = '/^[#0-9a-zA-Z ,.%()\-]+$/';
 
     // ==================== API publik ====================
 
@@ -204,8 +205,15 @@ final class HtmlSanitizer
         }
 
         // 5) Tag diperbolehkan: render dengan atribut tervalidasi.
+        // Konvensi Quill.js: daftar BULLET ditulis <ol data-list="bullet"> pada
+        // <li> — konversi menjadi <ul> agar semantik daftar tetap benar.
+        $renderTag = $tag;
+        if ($tag === 'ol' && self::isBulletList($node)) {
+            $renderTag = 'ul';
+        }
+
         $attrs = self::renderAttrs($node, $tag);
-        $open  = '<' . $tag . $attrs . '>';
+        $open  = '<' . $renderTag . $attrs . '>';
 
         if ($tag === 'br' || $tag === 'hr') {
             return $open;
@@ -221,7 +229,21 @@ final class HtmlSanitizer
             return $open . '&nbsp;';
         }
 
-        return $open . $inner . '</' . $tag . '>';
+        return $open . $inner . '</' . $renderTag . '>';
+    }
+
+    /** Apakah <ol> berisi <li data-list="bullet|checked|unchecked"> (keluaran Quill). */
+    private static function isBulletList(\DOMElement $ol): bool
+    {
+        foreach ($ol->childNodes as $child) {
+            if ($child instanceof \DOMElement && strtolower($child->tagName) === 'li') {
+                $dl = strtolower(trim($child->getAttribute('data-list')));
+
+                return in_array($dl, ['bullet', 'checked', 'unchecked'], true);
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -236,6 +258,9 @@ final class HtmlSanitizer
         $language = 'plaintext';
         if (preg_match('/language-([a-z0-9#+.\-]+)/i', $rawPre, $m)) {
             $language = strtolower($m[1]);
+        } elseif (preg_match('/data-language="([a-z0-9#+.\-]+)"/i', $rawPre, $m)) {
+            // Konvensi Quill.js: <pre data-language="...">
+            $language = strtolower($m[1]) === 'plain' ? 'plaintext' : strtolower($m[1]);
         }
 
         // Buang tag pembuka/penutup pre & code.
@@ -284,7 +309,9 @@ final class HtmlSanitizer
     /** Atribut tervalidasi untuk satu tag. */
     private static function renderAttrs(\DOMElement $node, string $tag): string
     {
-        $out = '';
+        $out        = '';
+        $styleDecls = [];
+
         foreach ($node->attributes as $attr) {
             $name = strtolower($attr->name);
 
@@ -297,14 +324,13 @@ final class HtmlSanitizer
             }
 
             if ($name === 'style') {
-                $style = self::sanitizeStyle($attr->value);
-                if ($style !== '') {
-                    $out .= ' style="' . htmlspecialchars($style, ENT_QUOTES, 'UTF-8') . '"';
-                }
+                array_push($styleDecls, ...self::styleDecls($attr->value));
                 continue;
             }
 
             if ($name === 'class') {
+                // Kelas editor Quill (ql-align-*, ql-indent-*) dikonversi ke style.
+                array_push($styleDecls, ...self::quillClassToStyles($attr->value));
                 $allowed = self::sanitizeClasses($attr->value, $tag);
                 if ($allowed !== '') {
                     $out .= ' class="' . htmlspecialchars($allowed, ENT_QUOTES, 'UTF-8') . '"';
@@ -321,10 +347,14 @@ final class HtmlSanitizer
             }
         }
 
+        if ($styleDecls !== []) {
+            $out = ' style="' . htmlspecialchars(implode('; ', array_unique($styleDecls)), ENT_QUOTES, 'UTF-8') . '"' . $out;
+        }
+
         return $out;
     }
 
-    /** Hanya kelas language-* pada code; kelas lain dibuang. */
+    /** Hanya kelas language-* pada code; kelas editor Quill dikonversi ke style. */
     private static function sanitizeClasses(string $raw, string $tag): string
     {
         $keep = [];
@@ -340,8 +370,32 @@ final class HtmlSanitizer
         return implode(' ', array_unique($keep));
     }
 
-    /** Filter atribut style terhadap allowlist properti + validasi nilai. */
-    private static function sanitizeStyle(string $raw): string
+    /**
+     * Konversi class khusus Quill.js menjadi style standar:
+     * - ql-align-center/right/justify -> style text-align
+     * - ql-indent-N                   -> style padding-left (N x 1.5em)
+     * Kelas Quill tidak pernah disimpan mentah ke database.
+     *
+     * @return list<string> deklarasi CSS tervalidasi
+     */
+    private static function quillClassToStyles(string $raw): array
+    {
+        $styles = [];
+        foreach (preg_split('/\s+/', trim($raw)) ?: [] as $class) {
+            $class = strtolower($class);
+            if (preg_match('/^ql-align-(center|right|justify)$/', $class, $m)) {
+                $styles[] = 'text-align: ' . $m[1];
+            } elseif (preg_match('/^ql-indent-([1-8])$/', $class, $m)) {
+                $em = number_format(((int) $m[1]) * 1.5, 1, '.', '');
+                $styles[] = 'padding-left: ' . $em . 'em';
+            }
+        }
+
+        return $styles;
+    }
+
+    /** Filter atribut style terhadap allowlist properti + validasi nilai; hasil berupa daftar deklarasi. */
+    private static function styleDecls(string $raw): array
     {
         $keep = [];
         foreach (explode(';', $raw) as $decl) {
@@ -368,7 +422,7 @@ final class HtmlSanitizer
             $keep[] = $prop . ': ' . $value;
         }
 
-        return implode('; ', $keep);
+        return $keep;
     }
 
     /** Normalisasi encoding input: byte UTF-8 invalid akan merusak DOM parser. */

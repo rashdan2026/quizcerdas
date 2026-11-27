@@ -343,7 +343,9 @@
 <!-- Nilai mahasiswa kini di menu Kuis → Nilai Mahasiswa (data attempt tetap tersimpan di database). -->
 <?= $this->endSection() ?>
 <?= $this->section('scripts') ?>
+<link rel="stylesheet" href="<?= base_url('assets/vendor/quill/quill.snow.css') ?>">
 <link rel="stylesheet" href="<?= base_url('assets/css/quiz-editor.css') ?>">
+<script src="<?= base_url('assets/vendor/quill/quill.js') ?>"></script>
 <script src="<?= base_url('assets/js/quiz-editor.js') ?>"></script>
 <script>
 function copyCode(btn) {

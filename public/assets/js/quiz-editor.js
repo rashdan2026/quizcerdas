@@ -1,263 +1,176 @@
 /* ============================================================
-   Quiz Rich Editor — editor ringan berbasis contenteditable
-   untuk pertanyaan soal (dosen). Tanpa dependensi eksternal.
-   Inisialisasi: textarea.rich-editor otomatis di-upgrade.
-   Isi tersinkron kembali ke textarea (form submit tetap sama).
+   Quiz Editor — WYSIWYG berbasis Quill.js 2.x (lokal).
+   Dosen menulis soal seperti dokumen biasa; HTML hanya format
+   penyimpanan di belakang layar. Inisialisasi otomatis pada
+   textarea.rich-editor; isi tersinkron kembali ke textarea.
    ============================================================ */
 (function () {
     'use strict';
 
-    var LANGS = ['php', 'javascript', 'python', 'java', 'c', 'cpp', 'sql', 'html', 'css', 'json', 'bash', 'plaintext'];
-    var SYMBOLS = ['≤', '≥', '≠', '≈', '±', '×', '÷', '→', '←', '∞', '∑', '√', 'π', 'α', 'β', 'Δ', 'θ', '²', '³', 'ⁿ', '₀', '₁', '₂', '&&', '||', '==', '!=', '=>', '->', '<', '>', '&&amp;', ';', '{', '}', '[]', 'NULL', 'TRUE', 'FALSE'];
-
-    var SEL_LANG = ':quiz-editor-lang';
+    // Toolbar ringkas & mudah dipahami dosen.
+    var TOOLBAR = [
+        [{ header: [3, 4, false] }],
+        ['bold', 'italic', 'underline', 'strike', { script: 'sub' }, { script: 'super' }],
+        [{ color: [] }, { background: [] }],
+        [{ align: [] }],
+        [{ list: 'ordered' }, { list: 'bullet' }, { indent: '-1' }, { indent: '+1' }],
+        ['blockquote', 'code-block'],
+        ['table-insert', 'table-row', 'table-col'],
+        ['clean']
+    ];
 
     function escHtml(s) {
         return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
-    function makeToolbar() {
-        var tb = document.createElement('div');
-        tb.className = 'qe-toolbar';
-        var groups = [
-            [['p', '¶ Teks', { cmd: 'formatBlock', val: 'p' }], ['h3', 'H3', { cmd: 'formatBlock', val: 'h3' }], ['h4', 'H4', { cmd: 'formatBlock', val: 'h4' }]],
-            [['bold', '<b>B</b>', { cmd: 'bold' }], ['italic', '<i>I</i>', { cmd: 'italic' }], ['underline', '<u>U</u>', { cmd: 'underline' }], ['strike', '<s>S</s>', { cmd: 'strikeThrough' }], ['sub', 'X₂', { cmd: 'subscript' }], ['sup', 'X²', { cmd: 'superscript' }]],
-            'COLOR',
-            [['jleft', '⟸', { cmd: 'justifyLeft' }], ['jcenter', '≡', { cmd: 'justifyCenter' }], ['jright', '⟹', { cmd: 'justifyRight' }], ['jfull', '☰', { cmd: 'justifyFull' }]],
-            [['ul', '• Daftar', { cmd: 'insertUnorderedList' }], ['ol', '1. Daftar', { cmd: 'insertOrderedList' }], ['indent', '⇥', { cmd: 'indent' }], ['outdent', '⇤', { cmd: 'outdent' }], ['quote', '❝', { cmd: 'formatBlock', val: 'blockquote' }], ['hr', '—', { cmd: 'insertHorizontalRule' }]],
-            'TABLE', 'CODE', 'CHARS', ['clear', '✕ Format', { cmd: 'removeFormat' }]
-        ];
-        groups.forEach(function (g) {
-            if (g === 'COLOR') {
-                var wrap = document.createElement('span');
-                wrap.className = 'qe-group';
-                wrap.innerHTML = '<label class="qe-btn qe-color" title="Warna font">A<input type="color" data-qe-color="fore"></label>' +
-                    '<label class="qe-btn qe-color qe-hl" title="Highlight">A<input type="color" data-qe-color="hilite"></label>';
-                tb.appendChild(wrap);
-                return;
-            }
-            if (g === 'TABLE') {
-                var tbtn = document.createElement('span');
-                tbtn.className = 'qe-group';
-                tbtn.innerHTML = '<span class="qe-btn" data-qe-table="insert" title="Sisip tabel 3×3">⊞ Tabel</span>' +
-                    '<span class="qe-btn" data-qe-table="row+" title="Tambah baris">+B</span>' +
-                    '<span class="qe-btn" data-qe-table="row-" title="Hapus baris">−B</span>' +
-                    '<span class="qe-btn" data-qe-table="col+" title="Tambah kolom">+K</span>' +
-                    '<span class="qe-btn" data-qe-table="col-" title="Hapus kolom">−K</span>';
-                tb.appendChild(tbtn);
-                return;
-            }
-            if (g === 'CODE') {
-                var sel = document.createElement('select');
-                sel.className = 'qe-select';
-                sel.dataset.qeCode = 'lang';
-                sel.innerHTML = '<option value="">⟨⟩ Kode…</option>' + LANGS.map(function (l) {
-                    return '<option value="' + l + '">' + l + '</option>';
-                }).join('');
-                tb.appendChild(sel);
-                return;
-            }
-            if (g === 'CHARS') {
-                var ch = document.createElement('span');
-                ch.className = 'qe-group';
-                ch.innerHTML = '<span class="qe-btn" data-qe-chars title="Karakter khusus">Ω</span>';
-                tb.appendChild(ch);
-                return;
-            }
-            var gr = document.createElement('span');
-            gr.className = 'qe-group';
-            g.forEach(function (b) {
-                var el = document.createElement('span');
-                el.className = 'qe-btn';
-                el.dataset.qeCmd = b[2].cmd;
-                if (b[2].val) el.dataset.qeVal = b[2].val;
-                el.innerHTML = b[1];
-                el.title = b[0];
-                el.setAttribute('unselectable', 'on');
-                gr.appendChild(el);
-            });
-            tb.appendChild(gr);
-        });
-        return tb;
+    function currentTd(quill) {
+        var sel = window.getSelection();
+        if (!sel.rangeCount) return null;
+        var node = sel.getRangeAt(0).startContainer;
+        while (node && node !== quill.root) {
+            if (node.nodeType === 1 && node.tagName && node.tagName.toLowerCase() === 'td') return node;
+            node = node.parentNode;
+        }
+        return null;
     }
 
-    function makeCharMenu() {
-        var m = document.createElement('div');
-        m.className = 'qe-charmenu d-none';
-        m.innerHTML = SYMBOLS.map(function (s) {
-            return '<span class="qe-char" data-char="' + escHtml(s) + '">' + s + '</span>';
-        }).join('');
-        return m;
+    // Operasi tabel ringan langsung di DOM container Quill (tanpa plugin).
+    function tableAction(quill, action) {
+        var cell = currentTd(quill);
+        if (action === 'insert') {
+            var html = '<table><tbody>';
+            for (var r = 0; r < 3; r++) {
+                html += '<tr>';
+                for (var c = 0; c < 3; c++) html += '<td>&nbsp;</td>';
+                html += '</tr>';
+            }
+            html += '</tbody></table>';
+            var range = quill.getSelection(true);
+            quill.clipboard.dangerouslyPasteHTML(range.index, html, 'user');
+            return;
+        }
+        if (!cell) { alert('Klik di dalam tabel terlebih dahulu.'); return; }
+        var tr = cell.parentElement;
+        var table = tr.closest('table');
+        if (!table) return;
+        var idx = Array.prototype.indexOf.call(tr.children, cell);
+        if (action === 'row') {
+            if (tr.parentNode.children.length <= 1) return;
+            tr.remove();
+            return;
+        }
+        if (action === 'col') {
+            if (tr.children.length <= 1) return;
+            table.querySelectorAll('tr').forEach(function (row) {
+                var target = row.children[Math.min(idx, row.children.length - 1)];
+                if (target) target.remove();
+            });
+            return;
+        }
+        var mode = action.split(':')[0]; // 'row+' | 'col+'
+        if (mode === 'row+') {
+            var clone = tr.cloneNode(true);
+            clone.querySelectorAll('td, th').forEach(function (td) { td.innerHTML = '&nbsp;'; });
+            tr.parentNode.insertBefore(clone, tr.nextSibling);
+            return;
+        }
+        if (mode === 'col+') {
+            table.querySelectorAll('tr').forEach(function (row) {
+                var td = document.createElement(row.children[0].tagName.toLowerCase());
+                td.innerHTML = '&nbsp;';
+                row.insertBefore(td, row.children[Math.min(idx + 1, row.children.length)] || null);
+            });
+        }
     }
 
     function initEditor(textarea) {
         if (textarea.dataset.qeReady) return;
+        if (typeof Quill === 'undefined') return; // aset belum termuat
         textarea.dataset.qeReady = '1';
 
         var wrap = document.createElement('div');
         wrap.className = 'qe-wrap';
-        var toolbar = makeToolbar();
-        var charMenu = makeCharMenu();
-        var area = document.createElement('div');
-        area.className = 'qe-area form-control';
-        area.contentEditable = 'true';
-        area.setAttribute('data-placeholder', 'Tulis pertanyaan… (boleh memakai formatting, tabel, dan blok kode)');
+        var editorDiv = document.createElement('div');
+        editorDiv.className = 'qe-editor';
 
         textarea.classList.add('d-none');
         textarea.parentNode.insertBefore(wrap, textarea);
-        wrap.appendChild(toolbar);
-        wrap.appendChild(area);
-        wrap.appendChild(charMenu);
+        wrap.appendChild(editorDiv);
 
-        // Isi awal dari textarea (soal lama = plain text → jadikan paragraf).
+        var quill = new Quill(editorDiv, {
+            theme: 'snow',
+            modules: {
+                toolbar: {
+                    container: TOOLBAR,
+                    handlers: {
+                        'table-insert': function () { tableAction(quill, 'insert'); },
+                        'table-row': function () { tableAction(quill, 'row'); },
+                        'table-col': function () { tableAction(quill, 'col'); },
+                        'table-row-add': function () { tableAction(quill, 'row+'); },
+                        'table-col-add': function () { tableAction(quill, 'col+'); }
+                    }
+                },
+                keyboard: { bindings: { 'code exit': null } }
+            }
+        });
+
+        // ---- muat isi awal: HTML (soal baru/AI) ATAU plain text (soal lama) ----
         var initial = textarea.value;
-        area.innerHTML = initial.trim() === '' ? '' :
-            (/<(p|div|ul|ol|table|pre|h3|h4|blockquote)\b/i.test(initial) ? initial : '<p>' + escHtml(initial).replace(/\n/g, '<br>') + '</p>');
+        if (initial.trim() !== '') {
+            if (/<(p|div|ul|ol|table|pre|h2|h3|h4|blockquote|br)\b/i.test(initial)) {
+                quill.clipboard.dangerouslyPasteHTML(initial, 'silent');
+            } else {
+                // Soal lama teks biasa: tampilkan apa adanya sebagai paragraf.
+                quill.clipboard.dangerouslyPasteHTML(
+                    '<p>' + escHtml(initial).replace(/\n/g, '<br>') + '</p>',
+                    'silent'
+                );
+            }
+        }
 
-        function sync() { textarea.value = area.innerHTML; }
-        area.addEventListener('input', sync);
+        // ---- sinkron balik ke textarea (form submit tetap sama) ----
+        function sync() {
+            if (quill.getText().trim() === '' && quill.root.querySelectorAll('table').length === 0) {
+                textarea.value = '';
+                return;
+            }
+            textarea.value = quill.root.innerHTML;
+        }
+        quill.on('text-change', sync);
         sync();
 
-        // ---- command ----
-        toolbar.addEventListener('mousedown', function (e) {
-            // Jaga seleksi tidak hilang saat klik toolbar.
-            if (e.target.closest('.qe-btn') || e.target.closest('.qe-select')) e.preventDefault();
-        });
-        toolbar.addEventListener('click', function (e) {
-            var btn = e.target.closest('[data-qe-cmd]');
-            if (btn) {
-                area.focus();
-                document.execCommand(btn.dataset.qeCmd, false, btn.dataset.qeVal || null);
-                sync();
-                return;
-            }
-            var tbl = e.target.closest('[data-qe-table]');
-            if (tbl) { tableAction(tbl.dataset.qeTable); sync(); return; }
-            if (e.target.closest('[data-qe-chars]')) { charMenu.classList.toggle('d-none'); return; }
-        });
-        toolbar.addEventListener('change', function (e) {
-            var sel = e.target.closest('[data-qe-code]');
-            if (sel && sel.value) { insertCodeBlock(sel.value); sel.value = ''; sync(); }
-        });
-        toolbar.addEventListener('input', function (e) {
-            var c = e.target.closest('input[data-qe-color]');
-            if (c) {
-                area.focus();
-                document.execCommand(c.dataset.qeColor === 'fore' ? 'foreColor' : 'hiliteColor', false, c.value);
-                // Konversi ke style agar lolos sanitizer (foreColor menghasilkan <font>).
-                normalizeFont(area);
-                sync();
-            }
-        });
-        charMenu.addEventListener('click', function (e) {
-            var ch = e.target.closest('.qe-char');
-            if (ch) {
-                area.focus();
-                document.execCommand('insertText', false, ch.dataset.char);
-                charMenu.classList.add('d-none');
-                sync();
-            }
-        });
-        document.addEventListener('click', function (e) {
-            if (!e.target.closest('[data-qe-chars]') && !e.target.closest('.qe-charmenu')) charMenu.classList.add('d-none');
-        });
-
-        // <font color=...> hasil execCommand → <span style="color:...">
-        function normalizeFont(root) {
-            root.querySelectorAll('font[color]').forEach(function (f) {
-                var span = document.createElement('span');
-                span.style.color = f.getAttribute('color');
-                span.innerHTML = f.innerHTML;
-                f.replaceWith(span);
-            });
-            root.querySelectorAll('font[size],font[face]').forEach(function (f) {
-                var span = document.createElement('span');
-                span.innerHTML = f.innerHTML;
-                f.replaceWith(span);
-            });
+        // ---- tombol tambah baris/kolom pada toolbar tabel ----
+        var toolbarEl = quill.getModule('toolbar').container;
+        function addTool(title, label, handler) {
+            var existing = toolbarEl.querySelector('.qe-add');
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'ql-qe-tool qe-add';
+            btn.title = title;
+            btn.textContent = label;
+            btn.addEventListener('click', function (e) { e.preventDefault(); handler(); });
+            (existing ? existing.parentNode : toolbarEl).appendChild(btn);
+            return btn;
+        }
+        var rowAdd = addTool('Tambah baris (klik di dalam tabel)', '+ Baris', function () { tableAction(quill, 'row+'); });
+        var colAdd = addTool('Tambah kolom (klik di dalam tabel)', '+ Kolom', function () { tableAction(quill, 'col+'); });
+        // Pindahkan setelah tombol hapus kolom.
+        var colDel = toolbarEl.querySelector('.ql-table-col');
+        if (colDel && colDel.parentNode) {
+            colDel.parentNode.insertBefore(rowAdd, colDel.nextSibling);
+            colDel.parentNode.insertBefore(colAdd, rowAdd.nextSibling);
         }
 
-        // ---- code block ----
-        function currentBlock() {
-            var sel = window.getSelection();
-            if (!sel.rangeCount) return null;
-            var node = sel.getRangeAt(0).startContainer;
-            while (node && node !== area) {
-                if (node.nodeType === 1) {
-                    var tag = node.tagName.toLowerCase();
-                    if (tag === 'pre') return node;
-                    if (tag === 'code' && node.parentElement && node.parentElement.tagName.toLowerCase() === 'pre') return node.parentElement;
-                }
-                node = node.parentNode;
+        // Label tombol tabel agar tidak menampilkan teks mentah CSS content.
+        ['table-insert', 'table-row', 'table-col'].forEach(function (name) {
+            var b = toolbarEl.querySelector('.ql-' + name);
+            if (b) {
+                b.style.fontSize = '.72rem';
+                b.style.width = 'auto';
+                b.style.padding = '0 6px';
+                b.textContent = name === 'table-insert' ? 'Tabel' : (name === 'table-row' ? '− Baris' : '− Kolom');
             }
-            return null;
-        }
-        function insertCodeBlock(lang) {
-            var sel = window.getSelection();
-            var selectedText = sel && sel.rangeCount && !sel.getRangeAt(0).collapsed ? sel.toString() : '';
-            var html = '<pre><code class="language-' + lang + '">' + escHtml(selectedText || 'tulis kode di sini…') + '\n</code></pre><p><br></p>';
-            if (currentBlock()) {
-                // Sudah di dalam blok kode: ganti bahasanya saja.
-                var blk = currentBlock();
-                var code = blk.querySelector('code') || blk;
-                code.className = 'language-' + lang;
-                code.setAttribute('data-language', lang);
-                return;
-            }
-            area.focus();
-            document.execCommand('insertHTML', false, html);
-        }
-
-        // ---- table actions ----
-        function currentCell() {
-            var sel = window.getSelection();
-            if (!sel.rangeCount) return null;
-            var node = sel.getRangeAt(0).startContainer;
-            while (node && node !== area) {
-                if (node.nodeType === 1 && node.tagName && node.tagName.toLowerCase() === 'td') return node;
-                node = node.parentNode;
-            }
-            return null;
-        }
-        function tableAction(action) {
-            var cell = currentCell();
-            if (action === 'insert') {
-                var rows = 3, cols = 3, html = '<table><tbody>';
-                for (var r = 0; r < rows; r++) {
-                    html += '<tr>';
-                    for (var c = 0; c < cols; c++) html += '<td>&nbsp;</td>';
-                    html += '</tr>';
-                }
-                html += '</tbody></table><p><br></p>';
-                area.focus();
-                document.execCommand('insertHTML', false, html);
-                return;
-            }
-            if (!cell) { alert('Klik di dalam tabel terlebih dahulu.'); return; }
-            var tr = cell.parentElement;
-            var table = tr.parentElement.closest('table');
-            if (!table) return;
-            var idx = Array.prototype.indexOf.call(tr.children, cell);
-            if (action === 'row+') { table.querySelector('tbody') ? null : null; var clone = tr.cloneNode(true); tr.parentNode.insertBefore(clone, tr.nextSibling); }
-            if (action === 'row-') {
-                if (tr.parentNode.children.length > 1) tr.remove();
-            }
-            if (action === 'col+') {
-                table.querySelectorAll('tr').forEach(function (row) {
-                    var td = document.createElement(row.children[0].tagName.toLowerCase());
-                    td.innerHTML = '&nbsp;';
-                    row.insertBefore(td, row.children[Math.min(idx + 1, row.children.length)] || null);
-                });
-            }
-            if (action === 'col-') {
-                if (tr.children.length > 1) {
-                    table.querySelectorAll('tr').forEach(function (row) {
-                        var target = row.children[Math.min(idx, row.children.length - 1)];
-                        if (target) target.remove();
-                    });
-                }
-            }
-        }
+        });
     }
 
     function initAll(root) {
