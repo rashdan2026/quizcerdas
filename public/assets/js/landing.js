@@ -37,4 +37,36 @@
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') setMenu(false);
     });
+
+    // ==================== Formulir kontak ====================
+    var contactForm = document.getElementById('contactForm');
+    if (contactForm) {
+        var message = document.getElementById('contactMessage');
+        var counter = document.getElementById('contactMsgCount');
+
+        if (message && counter) {
+            var updateCounter = function () {
+                counter.textContent = String(message.value.length);
+            };
+            message.addEventListener('input', updateCounter);
+            updateCounter();
+        }
+
+        var captchaImg = document.getElementById('contactCaptchaImage');
+        var captchaRefresh = document.getElementById('contactCaptchaRefresh');
+        if (captchaImg && captchaRefresh) {
+            captchaRefresh.addEventListener('click', function () {
+                var base = captchaImg.src.split('?')[0];
+                captchaImg.src = base + '?new=1&t=' + Date.now();
+            });
+        }
+
+        contactForm.addEventListener('submit', function () {
+            var submit = document.getElementById('contactSubmit');
+            if (submit) {
+                submit.disabled = true;
+                submit.textContent = 'Mengirim...';
+            }
+        });
+    }
 })();

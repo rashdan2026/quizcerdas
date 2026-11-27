@@ -34,6 +34,9 @@ class Housekeeping extends BaseCommand
     /** Batas umur file cache (jam). */
     private const CACHE_MAX_HOURS = 48;
 
+    /** Batas umur log formulir kontak (hari) - hanya status, tanpa data pribadi. */
+    private const CONTACT_LOG_MAX_DAYS = 90;
+
     private const SESSION_PREFIX = 'ci_session';
 
     protected $group       = 'App';
@@ -50,6 +53,7 @@ class Housekeeping extends BaseCommand
             'cache'     => $this->pruneDir(WRITEPATH . 'cache', self::CACHE_MAX_HOURS * 3600),
             'session'   => $this->pruneSessions(),
             'quiz_tmp'  => $this->pruneQuizTemp(),
+            'contact'   => $this->pruneContactMessages(),
         ];
 
         foreach ($report as $label => $count) {
@@ -105,6 +109,26 @@ class Housekeeping extends BaseCommand
         }
 
         return $removed;
+    }
+
+    /**
+     * Hapus log formulir kontak yang lebih tua dari CONTACT_LOG_MAX_DAYS.
+     * Aman untuk tabel yang belum ada (deployment lama).
+     */
+    private function pruneContactMessages(): int
+    {
+        try {
+            $db     = db_connect();
+            $cutoff = date('Y-m-d H:i:s', time() - (self::CONTACT_LOG_MAX_DAYS * 86400));
+            $count  = $db->table('contact_messages')->where('created_at <', $cutoff)->countAllResults();
+            if ($count > 0) {
+                $db->table('contact_messages')->where('created_at <', $cutoff)->delete();
+            }
+
+            return $count;
+        } catch (\Throwable $e) {
+            return 0;
+        }
     }
 
     /** PDF & teks ekstraksi batch quiz yang sudah expired (>= expires_at). */

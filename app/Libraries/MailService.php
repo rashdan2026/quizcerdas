@@ -52,12 +52,20 @@ class MailService
     /**
      * Kirim email. Hasil selalu berbentuk:
      * ['ok' => bool, 'message' => string, 'provider' => string|null, 'id' => string|null]
+     *
+     * @param string|null $replyTo Alamat balasan (opsional). Hanya diteruskan
+     *                             ke provider yang mendukungnya (Resend).
      */
-    public function send(string $to, string $subject, string $html, ?string $text = null): array
+    public function send(string $to, string $subject, string $html, ?string $text = null, ?string $replyTo = null): array
     {
         $to = trim($to);
         if (! filter_var($to, FILTER_VALIDATE_EMAIL)) {
             return $this->result(false, 'Alamat email penerima tidak valid.', null);
+        }
+
+        $replyTo = $replyTo === null ? null : trim(str_replace(["\r", "\n"], '', $replyTo));
+        if ($replyTo !== '' && filter_var($replyTo, FILTER_VALIDATE_EMAIL) === false) {
+            $replyTo = null;
         }
 
         $subject = trim(str_replace(["\r", "\n"], ' ', $subject));
@@ -74,7 +82,7 @@ class MailService
                 return $this->result(false, 'Konfigurasi MAIL_PROVIDER tidak dikenal.', null);
             }
 
-            $result = $this->sendVia($provider, $to, $subject, $html, $text);
+            $result = $this->sendVia($provider, $to, $subject, $html, $text, $replyTo);
             if ($result['ok']) {
                 return $result;
             }
@@ -84,7 +92,7 @@ class MailService
             if ($provider === self::PROVIDER_RESEND) {
                 log_message('error', 'MailGateway: Resend gagal -> fallback Gmail/Webriau.');
 
-                $fallback = $this->sendVia(self::PROVIDER_WEBRIAU, $to, $subject, $html, $text);
+                $fallback = $this->sendVia(self::PROVIDER_WEBRIAU, $to, $subject, $html, $text, $replyTo);
                 if ($fallback['ok']) {
                     $fallback['message'] = 'OK (via Gmail/Webriau — fallback dari Resend)';
 
@@ -103,12 +111,12 @@ class MailService
 
         // Mode lama (gateway nonaktif): Gmail/Webriau dulu, fallback Resend
         // (menggantikan posisi TurboSMTP pada implementasi sebelumnya).
-        $primary = $this->sendVia(self::LEGACY_GMAIL_PROVIDER, $to, $subject, $html, $text);
+        $primary = $this->sendVia(self::LEGACY_GMAIL_PROVIDER, $to, $subject, $html, $text, $replyTo);
         if ($primary['ok']) {
             return $primary;
         }
 
-        $fallback = $this->sendVia(self::PROVIDER_RESEND, $to, $subject, $html, $text);
+        $fallback = $this->sendVia(self::PROVIDER_RESEND, $to, $subject, $html, $text, $replyTo);
         if ($fallback['ok']) {
             return $fallback;
         }
@@ -120,10 +128,10 @@ class MailService
         );
     }
 
-    private function sendVia(string $provider, string $to, string $subject, string $html, string $text): array
+    private function sendVia(string $provider, string $to, string $subject, string $html, string $text, ?string $replyTo = null): array
     {
         return match ($provider) {
-            self::PROVIDER_RESEND  => $this->sendViaResend($to, $subject, $html, $text),
+            self::PROVIDER_RESEND  => $this->sendViaResend($to, $subject, $html, $text, $replyTo),
             self::PROVIDER_WEBRIAU => $this->sendViaWebriau($to, $subject, $html, $text),
             // Aplikasi memakai satu layanan Gmail API (gmail.webriau.com).
             // Nilai "gmail" dipertahankan agar kompatibel dengan konfigurasi lama.
@@ -156,7 +164,7 @@ class MailService
 
     // ==================== Resend ====================
 
-    private function sendViaResend(string $to, string $subject, string $html, string $text): array
+    private function sendViaResend(string $to, string $subject, string $html, string $text, ?string $replyTo = null): array
     {
         $apiKey = trim((string) env('RESEND_API_KEY', ''));
         if ($apiKey === '') {
@@ -185,13 +193,18 @@ class MailService
                 Headers::withAuthorization(ApiKey::from($apiKey))
             ));
 
-            $result = $client->emails->send([
+            $payload = [
                 'from'    => $this->formatFrom($fromName, $fromEmail),
                 'to'      => [$to],
                 'subject' => $subject,
                 'html'    => $html,
                 'text'    => $text,
-            ]);
+            ];
+            if ($replyTo !== null && $replyTo !== '') {
+                $payload['reply_to'] = $replyTo;
+            }
+
+            $result = $client->emails->send($payload);
 
             $id = $result->id ?? null;
 

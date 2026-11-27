@@ -3,6 +3,17 @@
 $title = $title ?? 'KelasMerdeka.com – Platform Perkuliahan Digital untuk Dosen dan Mahasiswa';
 $description = 'Platform pembelajaran digital untuk membantu dosen dan mahasiswa mengelola materi, presensi QR Code, kuis online berbantuan AI, dan hasil belajar dalam satu tempat.';
 $base = rtrim(base_url(), '/');
+
+// Status formulir kontak (disiapkan Home::index / ContactService).
+$contact     = is_array($contact ?? null) ? $contact : [];
+$cEnabled    = ! empty($contact['enabled']);
+$cSuccess    = ! empty($contact['success']);
+$cBlocked    = ! empty($contact['blocked']);
+$cErrors     = is_array($contact['errors'] ?? null) ? $contact['errors'] : [];
+$cValues     = is_array($contact['values'] ?? null) ? $contact['values'] : [];
+$cToken      = (string) ($contact['form_token'] ?? '');
+$cMaxLength  = max(200, (int) ($contact['max_length'] ?? 2000));
+$cRetryText  = trim((string) ($contact['retry_text'] ?? ''));
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -77,6 +88,7 @@ $base = rtrim(base_url(), '/');
             <a href="#fitur-mahasiswa">Fitur Mahasiswa</a>
             <a href="#cara-kerja">Cara Kerja</a>
             <a href="#tentang">Tentang</a>
+            <a href="#kontak">Kontak</a>
         </nav>
 
         <div class="km-nav-actions">
@@ -96,6 +108,7 @@ $base = rtrim(base_url(), '/');
         <a href="#fitur-mahasiswa" data-close-menu>Fitur Mahasiswa</a>
         <a href="#cara-kerja" data-close-menu>Cara Kerja</a>
         <a href="#tentang" data-close-menu>Tentang</a>
+        <a href="#kontak" data-close-menu>Kontak</a>
         <a href="<?= base_url('/auth') ?>" class="km-btn km-btn-outline">Login</a>
         <a href="<?= base_url('/register') ?>" class="km-btn km-btn-primary">Daftar</a>
     </div>
@@ -596,6 +609,117 @@ $base = rtrim(base_url(), '/');
     </div>
 </section>
 
+<!-- ==================== KONTAK ==================== -->
+<section class="km-section alt" id="kontak">
+    <div class="km-container">
+        <div class="km-section-head">
+            <span class="km-kicker">Kontak</span>
+            <h2>Hubungi Tim KelasMerdeka</h2>
+            <p>Punya pertanyaan, masukan, atau membutuhkan informasi lebih lanjut mengenai KelasMerdeka? Silakan kirimkan pesan kepada tim kami melalui formulir berikut.</p>
+        </div>
+
+        <div class="km-contact">
+            <?php if ($cSuccess): ?>
+                <div class="km-contact-panel is-success" role="status">
+                    <span class="km-contact-panel-icon"><svg aria-hidden="true"><use href="#i-check-circle"/></svg></span>
+                    <h3>&#10003; Pesan Berhasil Dikirim</h3>
+                    <p>Kami akan menghubungi Anda kembali.</p>
+                    <p>Terima kasih telah menghubungi Tim KelasMerdeka.</p>
+                    <p class="km-contact-note">
+                        Formulir dinonaktifkan sementara untuk perangkat ini.
+                        <?= $cRetryText !== '' ? esc($cRetryText) : 'Anda dapat mengirimkan pesan baru setelah 24 jam.' ?>
+                    </p>
+                </div>
+            <?php elseif ($cBlocked): ?>
+                <div class="km-contact-panel is-locked" role="status">
+                    <span class="km-contact-panel-icon"><svg aria-hidden="true"><use href="#i-clock"/></svg></span>
+                    <h3>Pesan Sudah Pernah Dikirim</h3>
+                    <p>Anda sudah mengirimkan pesan kepada Tim KelasMerdeka. Kami akan menghubungi Anda kembali.</p>
+                    <p class="km-contact-note">
+                        <?= $cRetryText !== '' ? esc($cRetryText) : 'Anda dapat mengirimkan pesan baru setelah 24 jam.' ?>
+                    </p>
+                </div>
+            <?php elseif (! $cEnabled): ?>
+                <div class="km-contact-panel is-locked" role="status">
+                    <span class="km-contact-panel-icon"><svg aria-hidden="true"><use href="#i-lock"/></svg></span>
+                    <h3>Formulir Sedang Tidak Tersedia</h3>
+                    <p>Silakan coba lagi beberapa saat lagi.</p>
+                </div>
+            <?php else: ?>
+                <form class="km-contact-form" id="contactForm" method="post" action="<?= base_url('/contact/send') ?>">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="contact_form_token" value="<?= esc($cToken, 'attr') ?>">
+
+                    <div class="km-hp" aria-hidden="true">
+                        <label for="contactWebsite">Website</label>
+                        <input type="text" id="contactWebsite" name="website" value="" tabindex="-1" autocomplete="off">
+                    </div>
+
+                    <?php if ($cErrors !== []): ?>
+                        <div class="km-contact-alert" role="alert">
+                            <strong>Pesan belum berhasil dikirim.</strong>
+                            <ul>
+                                <?php foreach ($cErrors as $error): ?>
+                                    <li><?= esc((string) $error) ?></li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </div>
+                    <?php endif; ?>
+
+                    <div class="km-contact-grid">
+                        <div class="km-field">
+                            <label for="contactName">Nama Lengkap</label>
+                            <input type="text" id="contactName" name="contact_name" value="<?= esc((string) ($cValues['contact_name'] ?? ''), 'attr') ?>"
+                                   maxlength="80" minlength="3" autocomplete="name" placeholder="Nama lengkap Anda" required>
+                        </div>
+
+                        <div class="km-field">
+                            <label for="contactEmail">Alamat Email</label>
+                            <input type="email" id="contactEmail" name="contact_email" value="<?= esc((string) ($cValues['contact_email'] ?? ''), 'attr') ?>"
+                                   maxlength="120" autocomplete="email" placeholder="nama@contoh.com" required>
+                        </div>
+
+                        <div class="km-field">
+                            <label for="contactWhatsapp">Nomor WhatsApp</label>
+                            <input type="tel" id="contactWhatsapp" name="contact_whatsapp" value="<?= esc((string) ($cValues['contact_whatsapp'] ?? ''), 'attr') ?>"
+                                   maxlength="24" autocomplete="tel" inputmode="tel" placeholder="081234567890" required>
+                            <small>Format Indonesia, misalnya 081234567890 atau +6281234567890.</small>
+                        </div>
+
+                        <div class="km-field km-field-full">
+                            <label for="contactMessage">Pesan Anda</label>
+                            <textarea id="contactMessage" name="contact_message" rows="6" maxlength="<?= $cMaxLength ?>" minlength="5"
+                                      placeholder="Tuliskan pertanyaan, masukan, atau informasi yang Anda butuhkan." required><?= esc((string) ($cValues['contact_message'] ?? '')) ?></textarea>
+                            <small class="km-char-count"><span id="contactMsgCount">0</span>/<?= $cMaxLength ?> karakter</small>
+                        </div>
+
+                        <div class="km-field km-field-full">
+                            <label for="contactCaptcha">Masukkan karakter pada gambar</label>
+                            <div class="km-captcha-row">
+                                <img id="contactCaptchaImage" class="km-captcha-img"
+                                     src="<?= base_url('/contact/captcha') ?>?t=<?= time() ?>"
+                                     alt="Gambar CAPTCHA" width="240" height="80">
+                                <button type="button" class="km-captcha-refresh" id="contactCaptchaRefresh">Muat ulang</button>
+                                <input type="text" id="contactCaptcha" name="contact_captcha" value=""
+                                       maxlength="5" autocomplete="off" autocapitalize="characters" spellcheck="false"
+                                       placeholder="5 karakter" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="km-contact-actions">
+                        <button type="submit" class="km-btn km-btn-primary" id="contactSubmit">Kirim Pesan</button>
+                        <span class="km-contact-privacy">
+                            <svg aria-hidden="true"><use href="#i-shield"/></svg>
+                            Data Anda hanya digunakan untuk menindaklanjuti pesan ini.
+                        </span>
+                    </div>
+                </form>
+            <?php endif; ?>
+        </div>
+    </div>
+</section>
+
 <!-- ==================== CTA PENUTUP ==================== -->
 <section class="km-final">
     <div class="km-container">
@@ -643,6 +767,7 @@ $base = rtrim(base_url(), '/');
                     <li><a href="#biaya">Informasi Biaya</a></li>
                     <li><a href="#faq">FAQ</a></li>
                     <li><a href="#tentang">Tentang</a></li>
+                    <li><a href="#kontak">Kontak</a></li>
                 </ul>
             </div>
         </div>

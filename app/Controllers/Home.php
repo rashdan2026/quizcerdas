@@ -2,6 +2,8 @@
 
 namespace App\Controllers;
 
+use App\Libraries\ContactService;
+
 class Home extends BaseController
 {
     /**
@@ -27,6 +29,18 @@ class Home extends BaseController
             return redirect()->to('/student/dashboard');
         }
 
-        return view('landing/index');
+        // Status formulir kontak (aktif/terblokir/sukses + token CSRF form).
+        // Kegagalan layanan tidak boleh membuat Landing Page ikut gagal.
+        $contact = [];
+        try {
+            $contact = (new ContactService())->state();
+        } catch (\Throwable $e) {
+            log_message('error', 'Landing: gagal memuat status formulir kontak ({class}): {message}', [
+                'class'   => get_class($e),
+                'message' => $e->getMessage(),
+            ]);
+        }
+
+        return view('landing/index', ['contact' => $contact]);
     }
 }

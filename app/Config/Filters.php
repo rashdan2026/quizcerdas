@@ -38,6 +38,7 @@ class Filters extends BaseFilters
         'performance'   => PerformanceMetrics::class,
         'authguard'     => AuthGuard::class,
         'maintenance'   => MaintenanceFilter::class,
+        'contactcsrf'   => \App\Filters\ContactCsrf::class,
     ];
 
     /**
@@ -75,8 +76,8 @@ class Filters extends BaseFilters
     public array $globals = [
         'before' => [
             // 'honeypot',
-            'maintenance',  // Jalan pertama — non-admin selalu dapat halaman maintenance duluan
-            'csrf',
+            'maintenance',  // Jalan pertama - non-admin selalu dapat halaman maintenance duluan
+            'csrf' => ['except' => ['contact/send']], // formulir kontak punya penanganan CSRF sendiri (ramah pengguna)
             // 'invalidchars',
         ],
         'after' => [

@@ -83,8 +83,10 @@ writable/quiz_tmp/*
 !writable/quiz_tmp/.htaccess
 writable/exports/*
 writable/loadtest-results/*
-# Kunci enkripsi API AI — dibuat otomatis per server, JANGAN masuk git.
+# Kunci enkripsi API AI - dibuat otomatis per server, JANGAN masuk git.
 writable/quiz_secret.key
+# Pepper hash token/IP formulir kontak - dibuat otomatis per server.
+writable/contact_secret.key
 
 # Backup files
 *.bak

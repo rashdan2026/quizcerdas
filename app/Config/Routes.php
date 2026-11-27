@@ -36,6 +36,11 @@ $routes->get('logout', 'Auth::logout');
 
 $routes->get('media/gfx/(:any)', 'AdImage::serve/$1');
 $routes->get('ad/click/(:num)', 'AdClick::track/$1');
+
+// ===================== Formulir Kontak Landing Page =====================
+$routes->get('contact/captcha', 'Contact::captcha');
+$routes->post('contact/send', 'Contact::send', ['filter' => 'contactcsrf']);
+
 $routes->get('maintenance', function () { return view('maintenance', ['appName' => app_name()]); });
 
 $routes->group('profile', ['filter' => 'authguard'], static function ($routes) {
