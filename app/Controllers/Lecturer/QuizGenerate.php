@@ -71,7 +71,15 @@ class QuizGenerate extends BaseController
         // boleh memblokir generate baru — gagalkan lebih dulu.
         $this->batchModel->failStaleProcessing($quizId, self::STALE_SECONDS);
 
-        $created = $this->createBatch((int) $quiz['id']);
+        try {
+            $created = $this->createBatch((int) $quiz['id']);
+        } catch (\Throwable $e) {
+            log_message('error', 'QuizGenerate::generate gagal menyiapkan batch — {class}: {msg} @ {file}:{line}', [
+                'class' => $e::class, 'msg' => mb_substr($e->getMessage(), 0, 300),
+                'file'  => basename($e->getFile()), 'line' => $e->getLine(),
+            ]);
+            $created = ['ok' => false, 'error' => 'server_error', 'message' => self::SERVER_ERROR_MESSAGE];
+        }
         if (! $created['ok']) {
             return $isAjax
                 ? $this->json(['ok' => false, 'error' => $created['error'], 'message' => $created['message']], 422)
@@ -387,6 +395,16 @@ class QuizGenerate extends BaseController
     {
         $this->ownedQuizOrFail($quizId);
 
+        // AdaptivePdfReader & supporting classes adalah berkas baru — bila
+        // deployment belum memuatnya, jangan 500 mentah: beri pesan jelas.
+        if (! class_exists(\App\Libraries\Quiz\AdaptivePdfReader::class)) {
+            return $this->json([
+                'ok'      => false,
+                'error'   => 'deployment_incomplete',
+                'message' => 'Komponen analisis PDF belum lengkap di server (berkas app/Libraries/Quiz/AdaptivePdfReader.php tidak ditemukan). Administrator perlu memastikan deployment memuat seluruh berkas terbaru. Anda tetap bisa langsung menekan Generate tanpa Periksa.',
+            ], 503);
+        }
+
         $file = $this->request->getFile('pdf_file');
         if ($file === null || ! $file->isValid()) {
             return $this->json([
@@ -419,26 +437,48 @@ class QuizGenerate extends BaseController
         $dir = $this->tempDir();
 
         // Simpan sementara + pindai malware (sama ketat dengan jalur generate).
-        $token  = bin2hex(random_bytes(16));
+        $token   = bin2hex(random_bytes(16));
         $pdfPath = $dir . '/analyze_' . $token . '.pdf';
         $file->move($dir, basename($pdfPath));
 
-        $scan = (new MalwareScanner())->scan($pdfPath);
-        if ($scan['status'] !== 'clean') {
+        try {
+            // Analisis dapat memakai memori lebih (PDF besar, banyak halaman).
+            // Naikkan bila konfigurasi mengizinkan — gagal diam-diam tidak apa.
+            $currentLimit = trim((string) ini_get('memory_limit'));
+            if ($currentLimit !== '' && $currentLimit !== '-1' && $this->iniBytes($currentLimit) < 512 * 1048576) {
+                @ini_set('memory_limit', '512M');
+            }
+
+            $scan = (new MalwareScanner())->scan($pdfPath);
+            if ($scan['status'] !== 'clean') {
+                @unlink($pdfPath);
+
+                return $this->json([
+                    'ok'      => false,
+                    'error'   => 'scan_' . $scan['status'],
+                    'message' => $scan['status'] === 'infected'
+                        ? 'File ditolak karena gagal pemeriksaan keamanan.'
+                        : 'File ditolak karena keamanannya tidak dapat dipastikan (pemindai tidak tersedia/gagal).',
+                ], 422);
+            }
+
+            // Analisis pembacaan — kegagalan ekstraksi diketahui SEBELUM AI dipanggil.
+            // SEMUA exception dibungkus: endpoint wajib selalu menjawab JSON
+            // (respons kosong/error HTML membuat frontend kehilangan pesan).
+            $result = (new \App\Libraries\Quiz\AdaptivePdfReader())->analyze($pdfPath);
+        } catch (\Throwable $e) {
             @unlink($pdfPath);
+            log_message('error', 'QuizGenerate::analyzePdf gagal — {class}: {msg} @ {file}:{line}', [
+                'class' => $e::class, 'msg' => mb_substr($e->getMessage(), 0, 300),
+                'file'  => basename($e->getFile()), 'line' => $e->getLine(),
+            ]);
 
             return $this->json([
                 'ok'      => false,
-                'error'   => 'scan_' . $scan['status'],
-                'message' => $scan['status'] === 'infected'
-                    ? 'File ditolak karena gagal pemeriksaan keamanan.'
-                    : 'File ditolak karena keamanannya tidak dapat dipastikan (pemindai tidak tersedia/gagal).',
-            ], 422);
+                'error'   => 'server_error',
+                'message' => 'Pemeriksaan PDF gagal karena kesalahan internal server (detail dicatat di log aplikasi). Anda tetap bisa langsung menekan Generate tanpa Periksa; bila Generate juga gagal, hubungi administrator.',
+            ], 500);
         }
-
-        // Analisis pembacaan — kegagalan ekstraksi diketahui SEBELUM AI dipanggil.
-        $reader = new \App\Libraries\Quiz\AdaptivePdfReader();
-        $result = $reader->analyze($pdfPath);
 
         $payload = [
             'ok'       => true,

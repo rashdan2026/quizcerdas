@@ -142,7 +142,18 @@ class QuestionGenerationService
 
         // Adaptive PDF Reader: parser utama -> parser alternatif -> OCR (bila
         // tersedia), dengan pemeriksaan kualitas per halaman & normalisasi.
-        $res = (new AdaptivePdfReader())->analyze((string) $batch['pdf_path']);
+        // Bila kelas baru belum ada di server (deployment belum lengkap),
+        // jatuh ke parser langsung agar Generate tetap berfungsi.
+        if (class_exists(AdaptivePdfReader::class)) {
+            $res = (new AdaptivePdfReader())->analyze((string) $batch['pdf_path']);
+        } else {
+            $legacy = (new PdfTextExtractor())->extract((string) $batch['pdf_path']);
+            $res    = $legacy['ok']
+                ? ['ok' => true, 'error' => null, 'text' => $legacy['text'],
+                   'summary' => ['can_generate' => true], 'warnings' => [], 'pages' => []]
+                : ['ok' => false, 'error' => $legacy['error'] ?? 'extract_failed', 'text' => '',
+                   'summary' => ['can_generate' => false], 'warnings' => [], 'pages' => []];
+        }
 
         if (! $res['ok']) {
             return ['ok' => false, 'error' => $res['error'] ?? 'extract_failed'];

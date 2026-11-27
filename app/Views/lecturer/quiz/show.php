@@ -700,14 +700,27 @@ document.getElementById('qcount').addEventListener('change', function () {
         body.innerHTML = '';
 
         fetch(analyzeUrl, {method: 'POST', headers: analyzeHeaders(), body: fd})
-            .then(function (r) { return r.json(); })
-            .then(function (d) {
-                if (!d || d.ok === false) {
+            .then(function (r) {
+                return r.text().then(function (t) {
+                    var d = null;
+                    try { d = JSON.parse(t); } catch (e) { d = null; }
+                    return {status: r.status, d: d, raw: t};
+                });
+            })
+            .then(function (res) {
+                var d = res.d;
+                if (res.status >= 400 || !d || d.ok === false) {
+                    var msg = d && (d.message || d.error) ? (d.message || ('Kode kesalahan: ' + d.error)) : null;
                     box.className = 'card mt-3 border-danger';
                     spinner.classList.add('d-none');
                     icon.className = 'bi bi-x-octagon-fill text-danger';
                     titleEl.textContent = 'Pemeriksaan gagal';
-                    body.innerHTML = '<div class="alert alert-danger small mb-0">' + documentEscape(d && d.message ? d.message : 'PDF tidak dapat diperiksa. Pastikan file PDF valid.') + '</div>';
+                    if (msg === null) {
+                        msg = res.status >= 400
+                            ? 'Server mengalami kesalahan (HTTP ' + res.status + '). Coba lagi; bila berulang, lihat log aplikasi atau hubungi administrator. Anda tetap bisa langsung menekan Generate tanpa Periksa.'
+                            : 'Respons server tidak dapat dibaca. Coba lagi; Anda tetap bisa langsung menekan Generate tanpa Periksa.';
+                    }
+                    body.innerHTML = '<div class="alert alert-danger small mb-0">' + documentEscape(msg) + '</div>';
                     return;
                 }
                 render(d);
@@ -717,7 +730,7 @@ document.getElementById('qcount').addEventListener('change', function () {
                 spinner.classList.add('d-none');
                 icon.className = 'bi bi-wifi-off text-danger';
                 titleEl.textContent = 'Koneksi terputus';
-                body.innerHTML = '<div class="alert alert-danger small mb-0">Pemeriksaan tidak selesai. Coba lagi.</div>';
+                body.innerHTML = '<div class="alert alert-danger small mb-0">Pemeriksaan tidak selesai. Coba lagi; Anda tetap bisa langsung menekan Generate tanpa Periksa.</div>';
             })
             .finally(function () { btn.disabled = false; spinner.classList.add('d-none'); });
     });
