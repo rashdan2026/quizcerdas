@@ -3,6 +3,9 @@
 .quiz-content { text-align: left; line-height: 1.55; }
 .quiz-content p { margin: 0 0 .5rem; }
 .quiz-content p:last-child { margin-bottom: 0; }
+/* Penekanan: bold & italic hasil AI tampil kontras namun natural */
+.quiz-content strong, .quiz-content b { font-weight: 700; color: #1E293B; }
+.quiz-content em, .quiz-content i { font-style: italic; }
 .quiz-content h3 { font-size: 1.05rem; font-weight: 700; margin: .6rem 0 .35rem; }
 .quiz-content h4 { font-size: .98rem; font-weight: 600; margin: .5rem 0 .3rem; }
 .quiz-content ul, .quiz-content ol { margin: 0 0 .5rem; padding-left: 1.4rem; }

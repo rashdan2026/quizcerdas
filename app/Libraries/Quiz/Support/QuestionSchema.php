@@ -15,10 +15,19 @@ final class QuestionSchema
 You create multiple-choice exam questions from study material.
 Rules:
 - Base every question ONLY on facts stated in the provided material. Do not invent information.
-- Write the question, options and explanation in the same language as the material.
+- Write the question, options and explanation in the same language as the material: clear, concise Indonesian that is easy for students to understand. No filler sentences, no decorative emoji or symbols, consistent technical terminology, unambiguous questions, and do not change the meaning or difficulty of the source material.
 - question_text MAY contain simple, clean HTML to structure the question when it helps clarity. Allowed elements ONLY: <p>, <br>, <strong>, <b>, <em>, <i>, <u>, <s>, <sub>, <sup>, <h3>, <h4>, <ul>, <ol>, <li>, <blockquote>, <table>, <thead>, <tbody>, <tr>, <th>, <td>, <span style="...">, and code blocks <pre><code class="language-xxx">...</code></pre>. No other tags, no attributes except those shown.
-- Use HTML only when it clarifies structure: simple questions can be a single <p>...</p>. Use <ol>/<ul> for steps or lists, a <table> when tabular data genuinely helps, and a code block (with correct language-xxx class) when the question shows program code.
-- Inside a code block write the program code EXACTLY as it should appear, escaped as HTML text (use &lt; for <, &gt; for >, &amp; for &). Never put real HTML tags inside a code block. Supported languages: php, javascript, python, java, c, cpp, sql, html, css, json, bash, plaintext.
+- Use HTML only when it clarifies structure: simple questions can be a single <p>...</p>. Never force formatting on every question — formatting must help understanding, not decorate.
+
+FORMATTING GUIDELINES (apply selectively based on the question content):
+- BOLD (<strong>): only for key words the student must notice — the main keyword of the question, critical conditions, and negation words such as BUKAN, KECUALI, TIDAK when missing them would change the answer. Never bold an entire sentence or paragraph.
+- ITALIC (<em>): for foreign/English terms relevant to the material (e.g. Entity Integrity, Referential Integrity, Functional Dependency, Primary Key, Software Development Life Cycle). Use sparingly; common Indonesian words do not need italics.
+- BULLET LIST (<ul>): when the question lists characteristics, components, statements to analyze, or unordered conditions.
+- NUMBERED LIST (<ol>): when the question presents an ordered process, numbered statements, or steps whose order matters. Never reorder statements given by the material.
+- PARAGRAPHS (<p>): separate context/scenario from the main question; avoid one long dense paragraph; keep related context and question connected; do not make every sentence its own paragraph. The actual question must be easy to find.
+- TABLE (<table>): only when comparing data that is genuinely easier as rows and columns; a plain list is enough otherwise.
+- CODE BLOCK: for programming/SQL/config content use <pre><code class="language-xxx"> with exact indentation and line breaks preserved. Never turn code into plain paragraphs. Supported languages: php, javascript, python, java, c, cpp, sql, html, css, json, bash, plaintext.
+- Inside a code block write the program code EXACTLY as it should appear, escaped as HTML text (use &lt; for <, &gt; for >, &amp; for &). Never put real HTML tags inside a code block.
 - Keep options ("a"-"d") as PLAIN TEXT without any HTML tags.
 - Each question has exactly 4 options (A-D). Exactly ONE option is correct and supported by the material; the other three must be plausible but clearly wrong, and no two options may have the same meaning or both be true.
 - correct_option is "A", "B", "C" or "D". Spread the correct option evenly across A-D.
@@ -77,6 +86,7 @@ TXT;
         return "MATERIAL:\n---\n{$chunk}\n---\n\n"
             . $lecturer
             . "Create exactly {$need} NEW questions. Allocation per difficulty (must follow): easy={$alloc['easy']}, medium={$alloc['medium']}, hard={$alloc['hard']}.\n\n"
+            . "Apply HTML formatting selectively per question based on its content (bold key words/negations, italics for foreign terms, ol for ordered steps, ul for unordered lists, table only when comparing data, code block for code) — a simple question stays a single paragraph.\n\n"
             . "ALREADY EXISTING / DO NOT REPEAT (same idea or same expected answer, even if reworded):\n"
             . ($existing === [] ? "(none)" : implode("\n", $existing))
             . "\n\nRespond with JSON exactly in this schema:\n{$json}";
