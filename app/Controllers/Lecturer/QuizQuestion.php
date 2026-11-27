@@ -35,6 +35,25 @@ class QuizQuestion extends BaseController
 
     private const MAX_QUESTIONS_PER_QUIZ = 100;
 
+    /** Respons JSON untuk AJAX (fetch dari halaman bank soal). */
+    private function jsonOut(bool $success, string $message, array $data = [])
+    {
+        return $this->response->setJSON(['success' => $success, 'message' => $message, 'data' => $data]);
+    }
+
+    /**
+     * Redirect kembali ke bank soal MEMPERTAHANKAN halaman pagination & kata
+     * pencarian (dipass form via input hidden) — untuk jalur non-JS.
+     */
+    private function backToBank(int $quizId, string $flashKey, string $flashMsg)
+    {
+        $page = max(1, (int) ($this->request->getPost('page') ?? 1));
+        $q    = trim((string) $this->request->getPost('q'));
+        $url  = '/lecturer/quiz/' . $quizId . '?page=' . $page . ($q !== '' ? '&q=' . urlencode($q) : '');
+
+        return redirect()->to($url)->with($flashKey, $flashMsg);
+    }
+
     /**
      * Tambah soal MANUAL.
      * Tidak memanggil AI dan TIDAK menjalankan pemeriksaan duplikasi (SDD 3.2A/4.4).
@@ -42,7 +61,8 @@ class QuizQuestion extends BaseController
      */
     public function addManual(int $quizId)
     {
-        $quiz = $this->ownedQuizOrFail($quizId);
+        $quiz   = $this->ownedQuizOrFail($quizId);
+        $isAjax = $this->request->isAJAX();
 
         // Batas maksimal 100 soal per kuis (validasi backend).
         $db = db_connect();
@@ -53,9 +73,9 @@ class QuizQuestion extends BaseController
 
         if ($existing >= self::MAX_QUESTIONS_PER_QUIZ) {
             $db->transRollback();
+            $msg = 'Jumlah soal dalam Kuis ini sudah mencapai batas maksimal 100 soal. Penambahan soal dibatalkan. Silakan hapus beberapa soal terlebih dahulu jika ingin menambahkan soal baru.';
 
-            return redirect()->to('/lecturer/quiz/' . $quizId)->with('error',
-                'Jumlah soal dalam Kuis ini sudah mencapai batas maksimal 100 soal. Penambahan soal dibatalkan. Silakan hapus beberapa soal terlebih dahulu jika ingin menambahkan soal baru.');
+            return $isAjax ? $this->jsonOut(false, $msg) : $this->backToBank($quizId, 'error', $msg);
         }
 
         $text = trim((string) $this->request->getPost('question_text'));
@@ -78,15 +98,21 @@ class QuizQuestion extends BaseController
         $expl = HtmlSanitizer::sanitizeInline($expl);
 
         if ($text === '' || mb_strlen($text) > HtmlSanitizer::MAX_QUESTION_CHARS) {
-            return redirect()->to('/lecturer/quiz/' . $quizId)->with('error', 'Pertanyaan wajib diisi (maks ' . HtmlSanitizer::MAX_QUESTION_CHARS . ' karakter).');
+            $msg = 'Pertanyaan wajib diisi (maks ' . HtmlSanitizer::MAX_QUESTION_CHARS . ' karakter).';
+
+            return $isAjax ? $this->jsonOut(false, $msg) : $this->backToBank($quizId, 'error', $msg);
         }
         foreach ($opts as $k => $v) {
             if ($v === '' || mb_strlen($v) > HtmlSanitizer::MAX_OPTION_CHARS) {
-                return redirect()->to('/lecturer/quiz/' . $quizId)->with('error', 'Semua opsi A-D wajib diisi (maks ' . HtmlSanitizer::MAX_OPTION_CHARS . ' karakter).');
+                $msg = 'Semua opsi A-D wajib diisi (maks ' . HtmlSanitizer::MAX_OPTION_CHARS . ' karakter).';
+
+                return $isAjax ? $this->jsonOut(false, $msg) : $this->backToBank($quizId, 'error', $msg);
             }
         }
         if (! in_array($correct, ['A', 'B', 'C', 'D'], true)) {
-            return redirect()->to('/lecturer/quiz/' . $quizId)->with('error', 'Kunci jawaban hanya boleh A/B/C/D (E berarti "Tidak tahu").');
+            $msg = 'Kunci jawaban hanya boleh A/B/C/D (E berarti "Tidak tahu").';
+
+            return $isAjax ? $this->jsonOut(false, $msg) : $this->backToBank($quizId, 'error', $msg);
         }
         if ($dur !== null && ! in_array($dur, [30, 60, 90, 120], true)) {
             $dur = null;
@@ -123,11 +149,16 @@ class QuizQuestion extends BaseController
             $db->transCommit();
         } else {
             $db->transRollback();
+            $msg = 'Gagal menyimpan soal. Silakan coba lagi.';
 
-            return redirect()->to('/lecturer/quiz/' . $quizId)->with('error', 'Gagal menyimpan soal.');
+            return $isAjax ? $this->jsonOut(false, $msg) : $this->backToBank($quizId, 'error', $msg);
         }
 
-        return redirect()->to('/lecturer/quiz/' . $quizId)->with('success', 'Soal manual disimpan.');
+        $msg = 'Soal berhasil disimpan.';
+
+        return $isAjax
+            ? $this->jsonOut(true, $msg, ['id' => (int) $inserted])
+            : $this->backToBank($quizId, 'success', $msg);
     }
 
     private function ownedQuestionOrFail(int $questionId): array
@@ -147,8 +178,9 @@ class QuizQuestion extends BaseController
      */
     public function update(int $questionId)
     {
-        $q    = $this->ownedQuestionOrFail($questionId);
-        $quiz = $this->ownedQuizOrFail((int) $q['quiz_id']);
+        $q      = $this->ownedQuestionOrFail($questionId);
+        $quiz   = $this->ownedQuizOrFail((int) $q['quiz_id']);
+        $isAjax = $this->request->isAJAX();
 
         $text = trim((string) $this->request->getPost('question_text'));
         $opts = [];
@@ -168,15 +200,21 @@ class QuizQuestion extends BaseController
         $expl = HtmlSanitizer::sanitizeInline($expl);
 
         if ($text === '' || mb_strlen($text) > HtmlSanitizer::MAX_QUESTION_CHARS) {
-            return redirect()->to('/lecturer/quiz/' . $q['quiz_id'])->with('error', 'Pertanyaan tidak valid (maks ' . HtmlSanitizer::MAX_QUESTION_CHARS . ' karakter).');
+            $msg = 'Pertanyaan tidak valid (maks ' . HtmlSanitizer::MAX_QUESTION_CHARS . ' karakter).';
+
+            return $isAjax ? $this->jsonOut(false, $msg) : $this->backToBank((int) $q['quiz_id'], 'error', $msg);
         }
         foreach ($opts as $v) {
             if ($v === '' || mb_strlen($v) > HtmlSanitizer::MAX_OPTION_CHARS) {
-                return redirect()->to('/lecturer/quiz/' . $q['quiz_id'])->with('error', 'Semua opsi A-D wajib diisi (maks ' . HtmlSanitizer::MAX_OPTION_CHARS . ' karakter).');
+                $msg = 'Semua opsi A-D wajib diisi (maks ' . HtmlSanitizer::MAX_OPTION_CHARS . ' karakter).';
+
+                return $isAjax ? $this->jsonOut(false, $msg) : $this->backToBank((int) $q['quiz_id'], 'error', $msg);
             }
         }
         if (! in_array($correct, ['A', 'B', 'C', 'D'], true)) {
-            return redirect()->to('/lecturer/quiz/' . $q['quiz_id'])->with('error', 'Kunci jawaban hanya boleh A/B/C/D.');
+            $msg = 'Kunci jawaban hanya boleh A/B/C/D.';
+
+            return $isAjax ? $this->jsonOut(false, $msg) : $this->backToBank((int) $q['quiz_id'], 'error', $msg);
         }
         if ($dur !== null && ! in_array($dur, [30, 60, 90, 120], true)) {
             $dur = null; // null = otomatis (per difficulty untuk soal AI)
@@ -190,7 +228,7 @@ class QuizQuestion extends BaseController
             }
         }
 
-        $this->model->update($questionId, [
+        $ok = (bool) $this->model->update($questionId, [
             'question_text'   => $text,
             'option_a'        => $opts['a'],
             'option_b'        => $opts['b'],
@@ -203,15 +241,24 @@ class QuizQuestion extends BaseController
             'updated_at'      => date('Y-m-d H:i:s'),
         ]);
 
-        return redirect()->to('/lecturer/quiz/' . $q['quiz_id'])->with('success', 'Soal diperbarui.');
+        $msg = $ok ? 'Soal berhasil disimpan.' : 'Gagal menyimpan soal. Silakan coba lagi.';
+
+        return $isAjax
+            ? $this->jsonOut($ok, $msg, ['id' => (int) $questionId])
+            : $this->backToBank((int) $q['quiz_id'], $ok ? 'success' : 'error', $msg);
     }
 
     public function delete(int $questionId)
     {
-        $q = $this->ownedQuestionOrFail($questionId);
+        $q      = $this->ownedQuestionOrFail($questionId);
+        $isAjax = $this->request->isAJAX();
 
         $this->model->update($questionId, ['is_active' => 0, 'updated_at' => date('Y-m-d H:i:s')]);
 
-        return redirect()->to('/lecturer/quiz/' . $q['quiz_id'])->with('success', 'Soal dihapus dari bank soal (histori attempt tetap aman).');
+        $msg = 'Soal dihapus dari bank soal (histori attempt tetap aman).';
+
+        return $isAjax
+            ? $this->jsonOut(true, $msg, ['id' => (int) $questionId])
+            : $this->backToBank((int) $q['quiz_id'], 'success', $msg);
     }
 }

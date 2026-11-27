@@ -194,8 +194,10 @@
     <div class="card-header"><i class="bi bi-pencil-square me-2"></i>Tambah Soal Manual</div>
     <div class="card-body">
         <div class="alert alert-warning small py-2">Soal manual tidak menjalankan pemeriksaan duplikasi dan tidak memiliki tingkat kesulitan. Opsi E selalu berarti "Tidak tahu" dan tidak boleh menjadi kunci.</div>
-        <form method="post" action="<?= base_url('/lecturer/quiz/' . $quiz['id'] . '/questions/manual') ?>" class="row g-3">
+        <form method="post" action="<?= base_url('/lecturer/quiz/' . $quiz['id'] . '/questions/manual') ?>" class="row g-3" data-ajax-save>
             <?= csrf_field() ?>
+            <input type="hidden" name="page" value="<?= (int) $page ?>">
+            <input type="hidden" name="q" value="<?= esc($search) ?>">
             <div class="col-12">
                 <label class="form-label">Pertanyaan <span class="text-danger">*</span></label>
                 <textarea name="question_text" class="form-control rich-editor" rows="3" required></textarea>
@@ -261,8 +263,10 @@
                     <span class="small text-muted"><i class="bi bi-file-earmark-pdf"></i> <?= esc($q['source_filename']) ?><?= $q['source_section'] ? ' &middot; ' . esc($q['source_section']) : '' ?></span>
                 <?php endif; ?>
             </div>
-            <form method="post" action="<?= base_url('/lecturer/quiz/questions/' . $q['id'] . '/update') ?>">
+            <form method="post" action="<?= base_url('/lecturer/quiz/questions/' . $q['id'] . '/update') ?>" data-ajax-save>
                 <?= csrf_field() ?>
+                <input type="hidden" name="page" value="<?= (int) $page ?>">
+                <input type="hidden" name="q" value="<?= esc($search) ?>">
                 <textarea name="question_text" class="form-control rich-editor mb-2" rows="2" required><?= esc($q['question_text']) ?></textarea>
                 <div class="row g-2 mb-2">
                     <?php foreach (['a', 'b', 'c', 'd'] as $k): ?>
@@ -317,9 +321,11 @@
                     <button class="btn btn-sm btn-primary"><i class="bi bi-save me-1"></i>Simpan</button>
                 </div>
             </form>
-            <form method="post" action="<?= base_url('/lecturer/quiz/questions/' . $q['id'] . '/delete') ?>" class="mt-1"
+            <form method="post" action="<?= base_url('/lecturer/quiz/questions/' . $q['id'] . '/delete') ?>" class="mt-1" data-ajax-delete
                   onsubmit="return confirm('Hapus soal ini dari bank soal?')">
                 <?= csrf_field() ?>
+                <input type="hidden" name="page" value="<?= (int) $page ?>">
+                <input type="hidden" name="q" value="<?= esc($search) ?>">
                 <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Hapus Soal</button>
             </form>
         </div>
@@ -347,6 +353,113 @@
 <link rel="stylesheet" href="<?= base_url('assets/css/quiz-editor.css') ?>">
 <script src="<?= base_url('assets/vendor/quill/quill.js') ?>"></script>
 <script src="<?= base_url('assets/js/quiz-editor.js') ?>"></script>
+<script>
+// ===================== AJAX Simpan/Hapus Soal =====================
+// Simpan soal TANPA reload halaman: posisi pagination, pencarian, dan scroll
+// tetap terjaga. Backend tetap melakukan validasi + sanitasi (Bukan bypass).
+(function () {
+    'use strict';
+
+    // ---- Notifikasi toast (tanpa reload) ----
+    function ensureToastHost() {
+        var host = document.getElementById('ajaxToastHost');
+        if (!host) {
+            host = document.createElement('div');
+            host.id = 'ajaxToastHost';
+            host.style.cssText = 'position:fixed;top:70px;right:16px;z-index:2000;display:flex;flex-direction:column;gap:8px;max-width:340px;';
+            document.body.appendChild(host);
+        }
+        return host;
+    }
+    function notify(kind, message) {
+        var colors = { success: ['#F0FDF4', '#166534', '#22C55E'], danger: ['#FFF1F2', '#BE123C', '#EF4444'] };
+        var c = colors[kind] || colors.danger;
+        var el = document.createElement('div');
+        el.className = 'alert mb-0 shadow-sm';
+        el.setAttribute('role', 'alert');
+        el.style.cssText = 'background:' + c[0] + ';color:' + c[1] + ';border-left:4px solid ' + c[2] + ';font-size:.86rem;';
+        el.textContent = message;
+        ensureToastHost().appendChild(el);
+        setTimeout(function () {
+            el.style.transition = 'opacity .4s'; el.style.opacity = '0';
+            setTimeout(function () { el.remove(); }, 400);
+        }, 4000);
+    }
+
+    function setBusy(form, btn, busy) {
+        if (form.dataset.busy === undefined) form.dataset.busy = '';
+        if (busy) {
+            if (form.dataset.busy === '1') return false; // cegah klik ganda
+            form.dataset.busy = '1';
+            if (btn) {
+                btn.dataset.origHtml = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Menyimpan...';
+            }
+        } else {
+            form.dataset.busy = '';
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = btn.dataset.origHtml || btn.innerHTML;
+            }
+        }
+        return true;
+    }
+
+    async function postForm(form, btn) {
+        if (!setBusy(form, btn, true)) return; // sedang berjalan: abaikan klik
+        try {
+            var res = await fetch(form.action, {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                body: new FormData(form) // sudah memuat CSRF token (csrf_field)
+            });
+            // Sesi berakhir / redirect login: server balas HTML, bukan JSON.
+            var ct = (res.headers.get('content-type') || '');
+            if (!ct.includes('application/json')) {
+                notify('danger', 'Sesi Anda telah berakhir. Silakan login ulang, lalu coba simpan lagi.');
+                return;
+            }
+            var d = await res.json();
+            if (d && d.success) {
+                notify('success', d.message || 'Soal berhasil disimpan.');
+                return d;
+            }
+            notify('danger', (d && d.message) || 'Gagal menyimpan soal. Silakan periksa isian dan coba lagi.');
+        } catch (e) {
+            // Jaringan terputus / server error: isi editor TIDAK dihapus.
+            notify('danger', 'Gagal terhubung ke server. Periksa koneksi internet Anda lalu coba simpan lagi.');
+        } finally {
+            setBusy(form, btn, false);
+        }
+    }
+
+    // ---- pasang pada form tambah soal & form edit/hapus per soal (bukan form lain) ----
+    document.addEventListener('submit', function (e) {
+        var form = e.target;
+        var isSave = form.matches('form[data-ajax-save]');
+        var isDelete = form.matches('form[data-ajax-delete]');
+        if (!isSave && !isDelete) return;
+        // Konfirmasi hapus via onsubmit inline dibatalkan -> jangan kirim apa pun.
+        if (e.defaultPrevented) return;
+
+        e.preventDefault(); // cegah submit biasa (tidak ada reload)
+
+        var btn = (e.submitter || form.querySelector('button[type="submit"], button:not([type])'));
+        var isCardRemoval = isDelete;
+        var btnHtml = btn ? btn.innerHTML : '';
+
+        postForm(form, btn).then(function (d) {
+            if (d && d.success && isCardRemoval) {
+                // Hapus kartu soal dari daftar tanpa reload (pagination tetap).
+                var card = form.closest('.border.rounded');
+                if (card) card.remove();
+            }
+            if (isCardRemoval && btn) btn.innerHTML = btnHtml; // label asli kembali
+        });
+    });
+})();
+</script>
 <script>
 function copyCode(btn) {
     var code = document.getElementById('accessCode').textContent.trim();
