@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow">
-    <title><?= esc($title ?? 'Admin Panel') ?></title>
+    <title><?= esc($title ?? 'Admin Panel — ' . app_name()) ?></title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
@@ -237,7 +237,7 @@
 <aside class="admin-sidebar" id="adminSidebar">
     <div class="brand">
         <div class="brand-icon"><i class="bi bi-shield-lock-fill"></i></div>
-        <div class="brand-text">Admin Panel<small>Absensi Kampus</small></div>
+        <div class="brand-text">Admin Panel<small><?= esc(app_name()) ?></small></div>
     </div>
 
     <div class="nav-section">Utama</div>

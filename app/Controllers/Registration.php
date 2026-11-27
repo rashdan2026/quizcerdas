@@ -254,8 +254,8 @@ class Registration extends BaseController
 
         $payload = [
             'to'      => $to,
-            'subject' => 'Kode Verifikasi Pendaftaran - Sistem Absensi Kampus',
-            'body'    => "Halo {$name},\n\nTerima kasih telah mendaftar.\n\nKode verifikasi Anda: {$otpCode}\nBerlaku selama " . self::OTP_VALIDITY_MINUTES . " menit.\n\nJangan bagikan kode ini ke siapa pun.\n\nSalam,\nAdmin Sistem Absensi Kampus",
+            'subject' => 'Kode Verifikasi Pendaftaran - ' . app_name(),
+            'body'    => "Halo {$name},\n\nTerima kasih telah mendaftar.\n\nKode verifikasi Anda: {$otpCode}\nBerlaku selama " . self::OTP_VALIDITY_MINUTES . " menit.\n\nJangan bagikan kode ini ke siapa pun.\n\nSalam,\nAdmin " . app_name(),
         ];
 
         $ch = curl_init($serverAUrl);
@@ -299,9 +299,9 @@ class Registration extends BaseController
         $data = [
             'from' => 'noreply@kursuscerdas.com',
             'to' => $to,
-            'subject' => 'Kode Verifikasi Pendaftaran - Sistem Absensi Kampus',
-            'content' => "Halo {$name},\n\nTerima kasih telah mendaftar.\n\nKode verifikasi Anda: {$otpCode}\nBerlaku selama " . self::OTP_VALIDITY_MINUTES . " menit.\n\nJangan bagikan kode ini ke siapa pun.\n\nSalam,\nAdmin Sistem Absensi Kampus",
-            'html_content' => "<p>Halo {$name},</p><p>Terima kasih telah mendaftar.</p><p>Kode verifikasi Anda: <strong>{$otpCode}</strong></p><p>Berlaku selama " . self::OTP_VALIDITY_MINUTES . " menit.</p><p>Jangan bagikan kode ini ke siapa pun.</p><p>Salam,<br>Admin Sistem Absensi Kampus</p>",
+            'subject' => 'Kode Verifikasi Pendaftaran - ' . app_name(),
+            'content' => "Halo {$name},\n\nTerima kasih telah mendaftar.\n\nKode verifikasi Anda: {$otpCode}\nBerlaku selama " . self::OTP_VALIDITY_MINUTES . " menit.\n\nJangan bagikan kode ini ke siapa pun.\n\nSalam,\nAdmin " . app_name(),
+            'html_content' => "<p>Halo {$name},</p><p>Terima kasih telah mendaftar.</p><p>Kode verifikasi Anda: <strong>{$otpCode}</strong></p><p>Berlaku selama " . self::OTP_VALIDITY_MINUTES . " menit.</p><p>Jangan bagikan kode ini ke siapa pun.</p><p>Salam,<br>Admin " . app_name() . "</p>",
         ];
 
         $ch = curl_init($url);

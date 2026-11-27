@@ -74,6 +74,13 @@ class Settings extends BaseController
             $this->model->setValue($key, (string) $value, $desc);
             $saved++;
         }
+
+        // Nama aplikasi bisa berubah: bersihkan cache helper agar langsung
+        // terlihat di request berikutnya tanpa deploy ulang.
+        if (function_exists('reset_app_name_cache')) {
+            reset_app_name_cache();
+        }
+
         return redirect()->to('/admin/settings')->with('success', "{$saved} pengaturan disimpan.");
     }
 }

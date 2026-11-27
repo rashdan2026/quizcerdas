@@ -44,11 +44,10 @@ class MaintenanceFilter implements FilterInterface
         }
 
         // Tampilkan halaman maintenance (HTTP 503 Service Unavailable)
-        $appName   = $settingModel->getValue('app_name', 'Sistem Absensi Kampus');
         $response  = service('response');
         $response->setStatusCode(503);
         $response->setHeader('Retry-After', '3600');
-        $response->setBody(view('maintenance', ['appName' => $appName]));
+        $response->setBody(view('maintenance', ['appName' => app_name()]));
         return $response;
     }
 

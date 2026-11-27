@@ -130,7 +130,7 @@ class Dashboard extends BaseController
      */
     private function sendPasswordChangeEmail(string $to, string $name, string $newPassword): array
     {
-        $subject = 'Password Admin Berhasil Diubah - Sistem Absensi Kampus';
+        $subject = 'Password Admin Berhasil Diubah - ' . app_name();
         $body    = "Halo {$name},\n\n"
                  . "Password akun admin Anda baru saja berhasil diubah.\n\n"
                  . "Password baru Anda: {$newPassword}\n\n"
@@ -138,7 +138,7 @@ class Dashboard extends BaseController
                  . "segera hapus setelah Anda mencatat password di tempat aman.\n\n"
                  . "Jika Anda tidak merasa melakukan perubahan ini, "
                  . "segera hubungi tim teknis — kemungkinan akun Anda telah disalahgunakan.\n\n"
-                 . "--\nSistem Absensi Kampus";
+                 . "--\n" . app_name();
 
         if (! function_exists('curl_init')) {
             return ['ok' => false, 'message' => 'Ekstensi cURL tidak tersedia di server.'];

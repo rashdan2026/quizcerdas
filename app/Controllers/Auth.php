@@ -357,7 +357,7 @@ class Auth extends BaseController
 
     private function sendPasswordResetEmail(string $to, string $name, string $newPassword): array
     {
-        $subject = 'Reset Password - Sistem Absensi Kampus';
+        $subject = 'Reset Password - ' . app_name();
         $body = "Halo {$name},\n\n"
               . "Password Anda telah direset.\n\n"
               . "Password baru: {$newPassword}\n\n"

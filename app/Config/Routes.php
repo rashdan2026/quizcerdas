@@ -22,7 +22,7 @@ $routes->get('logout', 'Auth::logout');
 
 $routes->get('media/gfx/(:any)', 'AdImage::serve/$1');
 $routes->get('ad/click/(:num)', 'AdClick::track/$1');
-$routes->get('maintenance', function () { return view('maintenance', ['appName' => (new \App\Models\AppSettingModel())->getValue('app_name', 'Sistem Absensi Kampus')]); });
+$routes->get('maintenance', function () { return view('maintenance', ['appName' => app_name()]); });
 
 $routes->group('profile', ['filter' => 'authguard'], static function ($routes) {
     $routes->get('/', 'Profile::index');

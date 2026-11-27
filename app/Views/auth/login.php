@@ -8,7 +8,7 @@
                 <i class="bi bi-mortarboard-fill text-white fs-3"></i>
             </div>
             <h5 class="fw-700 mb-0" style="color:#1E293B;">Selamat Datang</h5>
-            <p class="text-muted small mt-1">Masuk ke Sistem Absensi Kampus</p>
+            <p class="text-muted small mt-1">Masuk ke <?= esc(app_name()) ?></p>
         </div>
         <div class="card">
             <div class="card-body p-4">

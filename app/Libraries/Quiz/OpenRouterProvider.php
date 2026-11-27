@@ -158,7 +158,7 @@ class OpenRouterProvider implements AIProviderInterface
                 'Content-Type: application/json',
                 'Authorization: Bearer ' . $this->config['api_key'],
                 'HTTP-Referer: ' . rtrim(config('App')->baseURL, '/'),
-                'X-Title: KelasMerdeka-Quiz',
+                'X-Title: ' . (function_exists('app_name') ? app_name() : 'Sistem Absensi Kampus'),
             ],
         ]);
         $raw       = curl_exec($ch);
