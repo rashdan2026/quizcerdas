@@ -1,11 +1,10 @@
-<?= $this->extend('layouts/app') ?>
+<?= $this->extend('layouts/admin') ?>
 <?= $this->section('content') ?>
-<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
-    <div>
-        <h4 class="page-title mb-0"><i class="bi bi-cpu me-2"></i>Pengaturan AI</h4>
-        <p class="text-muted small mb-0 mt-1">OpenRouter adalah satu-satunya AI Provider untuk Modul Quiz.</p>
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div class="text-muted small">
+        <i class="bi bi-info-circle me-1"></i>OpenRouter adalah satu-satunya AI Provider untuk Modul Quiz.
     </div>
-    <a href="<?= base_url('/admin/quiz-ai/logs') ?>" class="btn btn-outline-secondary btn-sm"><i class="bi bi-journal-text me-1"></i>Log AI</a>
+    <a href="<?= base_url('/admin/quiz-ai/logs') ?>" class="btn btn-sm btn-outline-info"><i class="bi bi-journal-text me-1"></i> Log AI</a>
 </div>
 
 <?php
@@ -50,7 +49,7 @@ foreach ($providers as $row) {
                         <div class="form-text">Key disimpan terenkripsi dan tidak pernah ditampilkan penuh.</div>
                     </div>
                     <div class="d-flex gap-2 flex-wrap">
-                        <button class="btn btn-primary btn-sm"><i class="bi bi-save me-1"></i>Simpan</button>
+                        <button class="btn btn-admin btn-sm"><i class="bi bi-save me-1"></i>Simpan</button>
                         <?php if ($p): ?>
                         <button type="submit" form="toggleForm<?= (int) $p['id'] ?>" class="btn btn-<?= (int) $p['is_enabled'] === 1 ? 'outline-warning' : 'outline-success' ?> btn-sm">
                             <i class="bi bi-power me-1"></i><?= (int) $p['is_enabled'] === 1 ? 'Nonaktifkan' : 'Aktifkan' ?>

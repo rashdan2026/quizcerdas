@@ -1,8 +1,10 @@
-<?= $this->extend('layouts/app') ?>
+<?= $this->extend('layouts/admin') ?>
 <?= $this->section('content') ?>
-<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
-    <h4 class="page-title mb-0"><i class="bi bi-journal-text me-2"></i>Log AI (200 terakhir)</h4>
-    <a href="<?= base_url('/admin/quiz-ai') ?>" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Kembali</a>
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div class="text-muted small">
+        <i class="bi bi-info-circle me-1"></i>Menampilkan 200 aktivitas AI terakhir (terbaru di atas).
+    </div>
+    <a href="<?= base_url('/admin/quiz-ai') ?>" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Kembali</a>
 </div>
 
 <div class="card">

@@ -28,7 +28,11 @@ class QuizAI extends BaseController
         }
         unset($p);
 
-        return view('admin/quiz_ai/index', ['providers' => $providers]);
+        return view('admin/quiz_ai/index', [
+            'pageTitle'    => 'Pengaturan AI',
+            'pageSubtitle' => 'Konfigurasi OpenRouter untuk pembuatan soal AI',
+            'providers'    => $providers,
+        ]);
     }
 
     private function seedDefaults(): void
@@ -144,6 +148,10 @@ class QuizAI extends BaseController
     {
         $logs = (new QuizAILogModel())->latest(200);
 
-        return view('admin/quiz_ai/logs', ['logs' => $logs]);
+        return view('admin/quiz_ai/logs', [
+            'pageTitle'    => 'Log AI',
+            'pageSubtitle' => '200 aktivitas penggunaan AI terakhir',
+            'logs'         => $logs,
+        ]);
     }
 }
