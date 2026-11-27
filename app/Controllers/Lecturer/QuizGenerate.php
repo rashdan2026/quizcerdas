@@ -140,7 +140,7 @@ class QuizGenerate extends BaseController
      * @return array{ok:bool, batch_id?:int, error?:string, message?:string}
      */
     /** Batas panjang instruksi tambahan dosen (karakter, bukan byte). */
-    private const MAX_INSTRUCTION_CHARS = 1000;
+    private const MAX_INSTRUCTION_CHARS = 500;
 
     private function createBatch(int $quizId): array
     {

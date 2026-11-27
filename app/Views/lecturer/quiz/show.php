@@ -131,7 +131,7 @@
                     placeholder="Contoh: Buat soal berbasis studi kasus, prioritaskan analisis dan penerapan konsep, gunakan bahasa sederhana yang mudah dipahami mahasiswa..."></textarea>
                 <div class="d-flex justify-content-between align-items-center mt-1">
                     <div class="invalid-feedback d-block text-danger small d-none" id="aiInstructionError"></div>
-                    <span class="form-text ms-auto" id="aiInstructionCounter">0/1000</span>
+                    <span class="form-text ms-auto" id="aiInstructionCounter">0/500</span>
                 </div>
             </div>
             <div class="col-12">
@@ -198,7 +198,8 @@
             <?= csrf_field() ?>
             <div class="col-12">
                 <label class="form-label">Pertanyaan <span class="text-danger">*</span></label>
-                <textarea name="question_text" class="form-control" rows="3" maxlength="1000" required></textarea>
+                <textarea name="question_text" class="form-control rich-editor" rows="3" required></textarea>
+                <div class="form-text small">Gunakan toolbar untuk formatting, tabel, dan blok kode. Kode program ditampilkan dengan syntax highlighting ke mahasiswa.</div>
             </div>
             <?php foreach (['a', 'b', 'c', 'd'] as $opt): ?>
             <div class="col-md-6">
@@ -262,7 +263,7 @@
             </div>
             <form method="post" action="<?= base_url('/lecturer/quiz/questions/' . $q['id'] . '/update') ?>">
                 <?= csrf_field() ?>
-                <textarea name="question_text" class="form-control mb-2" rows="2" maxlength="1000" required><?= esc($q['question_text']) ?></textarea>
+                <textarea name="question_text" class="form-control rich-editor mb-2" rows="2" required><?= esc($q['question_text']) ?></textarea>
                 <div class="row g-2 mb-2">
                     <?php foreach (['a', 'b', 'c', 'd'] as $k): ?>
                     <div class="col-md-6"><div class="input-group input-group-sm">
@@ -342,6 +343,8 @@
 <!-- Nilai mahasiswa kini di menu Kuis → Nilai Mahasiswa (data attempt tetap tersimpan di database). -->
 <?= $this->endSection() ?>
 <?= $this->section('scripts') ?>
+<link rel="stylesheet" href="<?= base_url('assets/css/quiz-editor.css') ?>">
+<script src="<?= base_url('assets/js/quiz-editor.js') ?>"></script>
 <script>
 function copyCode(btn) {
     var code = document.getElementById('accessCode').textContent.trim();
@@ -365,7 +368,7 @@ function copyCode(btn) {
     }
 }
 // ===================== Instruksi tambahan untuk AI (maks 1000 karakter) =====================
-const AI_INSTRUCTION_MAX = 1000;
+const AI_INSTRUCTION_MAX = 500;
 var aiField = document.getElementById('aiInstruction');
 var aiCounter = document.getElementById('aiInstructionCounter');
 var aiError = document.getElementById('aiInstructionError');

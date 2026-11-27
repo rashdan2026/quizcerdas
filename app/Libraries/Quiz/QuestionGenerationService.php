@@ -2,6 +2,7 @@
 
 namespace App\Libraries\Quiz;
 
+use App\Libraries\Quiz\HtmlSanitizer;
 use App\Libraries\Quiz\Support\QuestionSchema;
 use App\Models\Quiz\QuizBatchModel;
 use App\Models\Quiz\QuizModel;
@@ -225,10 +226,14 @@ class QuestionGenerationService
         }
 
         // 2) Konteks duplikasi dibangun SEKALI: satu query, hanya id + teks pertanyaan.
+        //    Soal bisa berisi HTML: dup-check & prompt memakai versi plain text.
         $existing = $this->questions->questionTextsForQuiz($quizId);
+        $existingStems = [];
         $checker  = new SemanticDuplicateChecker();
         foreach ($existing as $row) {
-            $checker->add('e' . $row['id'], (string) $row['question_text']);
+            $plain = HtmlSanitizer::toPlainText((string) $row['question_text']);
+            $existingStems[] = ['id' => $row['id'], 'question_text' => $plain];
+            $checker->add('e' . $row['id'], $plain);
         }
 
         $chunks = $this->buildChunks((string) $extraction['text']);
@@ -277,7 +282,7 @@ class QuestionGenerationService
 
             // Chunk dipilih bergilir agar putaran pengganti memakai materi yang berbeda.
             $chunk = $chunks[($round - 1) % count($chunks)];
-            $avoid = array_map(static fn ($q) => $q['question_text'], array_values($accepted));
+            $avoid = array_map(static fn ($q) => HtmlSanitizer::toPlainText($q['question_text']), array_values($accepted));
 
             $this->batches->setStatusMessage(
                 $batchId,
@@ -337,7 +342,10 @@ class QuestionGenerationService
                     continue;
                 }
 
-                $screen = $checker->screen($validated['question_text']);
+                // Dup-check memakai plain text: markup HTML tidak dianggap isi soal.
+                $plainText = HtmlSanitizer::toPlainText($validated['question_text']);
+
+                $screen = $checker->screen($plainText);
                 if ($screen['decision'] === 'duplicate') {
                     $stats['duplicates']++;
                     continue;
@@ -350,14 +358,14 @@ class QuestionGenerationService
 
                 $key = 'b' . (++$seq);
                 $accepted[$key] = $this->decorate($validated, $batch, $aiLabel, $level);
-                $checker->add($key, $validated['question_text']);
+                $checker->add($key, $plainText);
 
                 foreach ($screen['neighbors'] as $neighbor) {
                     $pairs[] = [
                         'id'        => count($pairs),
                         'key'       => $key,
                         'score'     => (float) $neighbor['score'],
-                        'candidate' => $validated['question_text'],
+                        'candidate' => $plainText,
                         'existing'  => (string) $neighbor['text'],
                     ];
                 }

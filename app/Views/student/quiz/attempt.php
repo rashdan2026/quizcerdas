@@ -15,14 +15,14 @@
         <div class="progress mb-3" style="height:6px;">
             <div class="progress-bar" id="progressBar" style="width:<?= $total > 0 ? round(($index - 1) / $total * 100) : 0 ?>%"></div>
         </div>
-        <div class="fw-semibold mb-3 quiz-protect" style="font-size:1.05rem;"><?= esc($question['text']) ?></div>
+        <div class="quiz-content fw-semibold mb-3 quiz-protect" style="font-size:1.05rem;"><?= \App\Libraries\Quiz\HtmlSanitizer::render($question['text']) ?></div>
         <div id="optionsBox">
             <?php foreach ($question['options'] as $opt): ?>
                 <div class="form-check option-row quiz-protect py-3 ps-4 border rounded mb-2" data-qid="<?= $question['id'] ?>" data-letter="<?= $opt['letter'] ?>" style="cursor:pointer;font-size:1rem;">
                     <input class="form-check-input mt-1" type="radio" name="answer"
                            id="opt<?= $opt['letter'] ?>" value="<?= $opt['letter'] ?>" style="width:1.3em;height:1.3em;">
                     <label class="form-check-label" for="opt<?= $opt['letter'] ?>">
-                        <strong><?= $opt['letter'] ?>.</strong> <?= esc($opt['text']) ?>
+                        <strong><?= $opt['letter'] ?>.</strong> <?= \App\Libraries\Quiz\HtmlSanitizer::render($opt['text']) ?>
                     </label>
                 </div>
             <?php endforeach; ?>
@@ -37,6 +37,10 @@
 </div>
 <?= $this->endSection() ?>
 <?= $this->section('scripts') ?>
+<link rel="stylesheet" href="<?= base_url('assets/vendor/highlight/github-dark.min.css') ?>">
+<link rel="stylesheet" href="<?= base_url('assets/css/quiz-content.css') ?>">
+<script src="<?= base_url('assets/vendor/highlight/highlight.min.js') ?>"></script>
+<script src="<?= base_url('assets/js/quiz-content.js') ?>"></script>
 <script>
 const CSRF_NAME = '<?= csrf_token() ?>';
 const CSRF_HASH = '<?= csrf_hash() ?>';

@@ -3,6 +3,7 @@
 namespace App\Controllers\Lecturer;
 
 use App\Controllers\BaseController;
+use App\Libraries\Quiz\HtmlSanitizer;
 use App\Models\Quiz\QuizModel;
 use App\Models\Quiz\QuizQuestionModel;
 
@@ -67,12 +68,21 @@ class QuizQuestion extends BaseController
         $durRaw  = $this->request->getPost('duration_seconds');
         $dur     = ($durRaw !== null && $durRaw !== '') ? (int) $durRaw : null;
 
-        if ($text === '' || mb_strlen($text) > 1000) {
-            return redirect()->to('/lecturer/quiz/' . $quizId)->with('error', 'Pertanyaan wajib diisi (maks 1000 karakter).');
+        // Sanitasi HTML allowlist (XSS) SEBELUM validasi & penyimpanan.
+        // Karakter khusus kode program tidak diubah — SQL injection dicegah
+        // oleh Query Builder (parameter binding), bukan dengan merusak data.
+        $text = HtmlSanitizer::sanitizeQuestion($text);
+        foreach ($opts as $k => $v) {
+            $opts[$k] = HtmlSanitizer::sanitizeInline($v);
+        }
+        $expl = HtmlSanitizer::sanitizeInline($expl);
+
+        if ($text === '' || mb_strlen($text) > HtmlSanitizer::MAX_QUESTION_CHARS) {
+            return redirect()->to('/lecturer/quiz/' . $quizId)->with('error', 'Pertanyaan wajib diisi (maks ' . HtmlSanitizer::MAX_QUESTION_CHARS . ' karakter).');
         }
         foreach ($opts as $k => $v) {
-            if ($v === '' || mb_strlen($v) > 300) {
-                return redirect()->to('/lecturer/quiz/' . $quizId)->with('error', 'Semua opsi A-D wajib diisi (maks 300 karakter).');
+            if ($v === '' || mb_strlen($v) > HtmlSanitizer::MAX_OPTION_CHARS) {
+                return redirect()->to('/lecturer/quiz/' . $quizId)->with('error', 'Semua opsi A-D wajib diisi (maks ' . HtmlSanitizer::MAX_OPTION_CHARS . ' karakter).');
             }
         }
         if (! in_array($correct, ['A', 'B', 'C', 'D'], true)) {
@@ -150,12 +160,19 @@ class QuizQuestion extends BaseController
         $durRaw  = $this->request->getPost('duration_seconds');
         $dur     = ($durRaw !== null && $durRaw !== '') ? (int) $durRaw : null;
 
-        if ($text === '' || mb_strlen($text) > 1000) {
-            return redirect()->to('/lecturer/quiz/' . $q['quiz_id'])->with('error', 'Pertanyaan tidak valid.');
+        // Sanitasi HTML allowlist (XSS) — sama dengan jalur tambah soal.
+        $text = HtmlSanitizer::sanitizeQuestion($text);
+        foreach ($opts as $k => $v) {
+            $opts[$k] = HtmlSanitizer::sanitizeInline($v);
+        }
+        $expl = HtmlSanitizer::sanitizeInline($expl);
+
+        if ($text === '' || mb_strlen($text) > HtmlSanitizer::MAX_QUESTION_CHARS) {
+            return redirect()->to('/lecturer/quiz/' . $q['quiz_id'])->with('error', 'Pertanyaan tidak valid (maks ' . HtmlSanitizer::MAX_QUESTION_CHARS . ' karakter).');
         }
         foreach ($opts as $v) {
-            if ($v === '' || mb_strlen($v) > 300) {
-                return redirect()->to('/lecturer/quiz/' . $q['quiz_id'])->with('error', 'Semua opsi A-D wajib diisi (maks 300 karakter).');
+            if ($v === '' || mb_strlen($v) > HtmlSanitizer::MAX_OPTION_CHARS) {
+                return redirect()->to('/lecturer/quiz/' . $q['quiz_id'])->with('error', 'Semua opsi A-D wajib diisi (maks ' . HtmlSanitizer::MAX_OPTION_CHARS . ' karakter).');
             }
         }
         if (! in_array($correct, ['A', 'B', 'C', 'D'], true)) {

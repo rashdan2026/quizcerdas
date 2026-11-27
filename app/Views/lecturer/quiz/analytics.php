@@ -36,7 +36,8 @@
         <tbody>
         <?php foreach ($perQuestion as $row): ?>
             <tr>
-                <td class="small"><?= esc(mb_substr($row['question']['question_text'], 0, 80)) ?><?= mb_strlen($row['question']['question_text']) > 80 ? '…' : '' ?></td>
+                <?php $plainText = \App\Libraries\Quiz\HtmlSanitizer::toPlainText($row['question']['question_text']); ?>
+                <td class="small"><?= esc(mb_substr($plainText, 0, 80)) ?><?= mb_strlen($plainText) > 80 ? '…' : '' ?></td>
                 <td><span class="badge bg-<?= $row['question']['source_type'] === 'manual' ? 'secondary' : 'primary' ?>"><?= esc($row['question']['source_type']) ?></span>
                     <?= $row['question']['difficulty_level'] ? '<span class="badge bg-light text-dark">' . esc((string) $row['question']['difficulty_level']) . '</span>' : '' ?></td>
                 <td class="text-center"><?= (int) $row['responses'] ?></td>

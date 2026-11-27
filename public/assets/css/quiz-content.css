@@ -1,0 +1,38 @@
+/* Container konten soal rich-text (dosen & mahasiswa).
+   Mencegah horizontal overflow halaman; tabel & kode punya scroll sendiri. */
+.quiz-content { text-align: left; line-height: 1.55; }
+.quiz-content p { margin: 0 0 .5rem; }
+.quiz-content p:last-child { margin-bottom: 0; }
+.quiz-content h3 { font-size: 1.05rem; font-weight: 700; margin: .6rem 0 .35rem; }
+.quiz-content h4 { font-size: .98rem; font-weight: 600; margin: .5rem 0 .3rem; }
+.quiz-content ul, .quiz-content ol { margin: 0 0 .5rem; padding-left: 1.4rem; }
+.quiz-content blockquote {
+    border-left: 3px solid #C7D2FE; background: #F8FAFC;
+    margin: .5rem 0; padding: .4rem .8rem; color: #475569; border-radius: 0 6px 6px 0;
+}
+.quiz-content table {
+    border-collapse: collapse; margin: .5rem auto; font-size: .9em;
+    max-width: 100%; display: block; overflow-x: auto; white-space: normal;
+}
+.quiz-content th, .quiz-content td {
+    border: 1px solid #CBD5E1; padding: .35rem .6rem; text-align: left;
+}
+.quiz-content th { background: #F1F5F9; font-weight: 600; }
+
+/* Code block: scroll sendiri, monospace, tombol salin */
+.quiz-content pre {
+    position: relative; margin: .5rem 0; border-radius: 8px; overflow: hidden;
+}
+.quiz-content pre code {
+    display: block; overflow-x: auto; padding: .8rem 1rem;
+    font-family: 'Consolas', 'Menlo', 'Monaco', monospace;
+    font-size: .82rem; line-height: 1.5; tab-size: 4;
+    max-height: 26rem; white-space: pre;
+}
+.quiz-content .code-copy-btn {
+    position: absolute; top: .35rem; right: .35rem; z-index: 2;
+    border: none; background: rgba(255,255,255,.14); color: #E2E8F0;
+    font-size: .68rem; padding: .15rem .5rem; border-radius: 5px; cursor: pointer;
+    opacity: .85; transition: opacity .15s;
+}
+.quiz-content .code-copy-btn:hover { opacity: 1; }

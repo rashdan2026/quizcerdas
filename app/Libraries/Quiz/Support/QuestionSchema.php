@@ -2,6 +2,8 @@
 
 namespace App\Libraries\Quiz\Support;
 
+use App\Libraries\Quiz\HtmlSanitizer;
+
 /**
  * Schema prompt & validasi output AI (terstruktur, ketat).
  */
@@ -14,14 +16,18 @@ You create multiple-choice exam questions from study material.
 Rules:
 - Base every question ONLY on facts stated in the provided material. Do not invent information.
 - Write the question, options and explanation in the same language as the material.
+- question_text MAY contain simple, clean HTML to structure the question when it helps clarity. Allowed elements ONLY: <p>, <br>, <strong>, <b>, <em>, <i>, <u>, <s>, <sub>, <sup>, <h3>, <h4>, <ul>, <ol>, <li>, <blockquote>, <table>, <thead>, <tbody>, <tr>, <th>, <td>, <span style="...">, and code blocks <pre><code class="language-xxx">...</code></pre>. No other tags, no attributes except those shown.
+- Use HTML only when it clarifies structure: simple questions can be a single <p>...</p>. Use <ol>/<ul> for steps or lists, a <table> when tabular data genuinely helps, and a code block (with correct language-xxx class) when the question shows program code.
+- Inside a code block write the program code EXACTLY as it should appear, escaped as HTML text (use &lt; for <, &gt; for >, &amp; for &). Never put real HTML tags inside a code block. Supported languages: php, javascript, python, java, c, cpp, sql, html, css, json, bash, plaintext.
+- Keep options ("a"-"d") as PLAIN TEXT without any HTML tags.
 - Each question has exactly 4 options (A-D). Exactly ONE option is correct and supported by the material; the other three must be plausible but clearly wrong, and no two options may have the same meaning or both be true.
 - correct_option is "A", "B", "C" or "D". Spread the correct option evenly across A-D.
 - Before writing a question, check that it has a single unambiguous answer and that it is not a rewording of another question.
 - difficulty: "easy" (remember or understand basic terms), "medium" (apply, compare, or analyze a simple case), "hard" (multi-step analysis or evaluation). Judge by the thinking required, not by sentence length.
-- explanation: ONE short sentence (maximum 20 words) stating why the correct option is right.
+- explanation: ONE short sentence (maximum 20 words) stating why the correct option is right, plain text.
 - Every question must test a different fact or idea from the material. Never rephrase or repeat another question, including the ones listed as already existing.
 - Avoid questions that can be answered without the material (trivial wording, joke options, "all of the above").
-- Output ONLY valid JSON, no markdown, matching the requested schema exactly.
+- Output ONLY valid JSON, no markdown, matching the requested schema exactly. Escape all quotes and special characters inside JSON strings correctly.
 TXT;
     }
 
@@ -56,7 +62,7 @@ TXT;
         }
 
         $json = <<<'TXT'
-{"questions":[{"question_text":"...","options":{"a":"...","b":"...","c":"...","d":"..."},"correct_option":"A|B|C|D","difficulty":"easy|medium|hard","explanation":"...","section":"chapter/section if known"}]}
+{"questions":[{"question_text":"<p>HTML allowed: p, strong, em, ol/ul/li, table, pre><code class=\"language-sql\">...</code></pre></p>","options":{"a":"plain text","b":"plain text","c":"plain text","d":"plain text"},"correct_option":"A|B|C|D","difficulty":"easy|medium|hard","explanation":"...","section":"chapter/section if known"}]}
 TXT;
 
         // Instruksi dosen dibingkai tegas sebagai data/guidance, bukan otoritas
@@ -108,23 +114,33 @@ TXT;
 
     /**
      * Validasi satu item soal hasil AI. Null jika tidak lolos.
+     * question_text disanitasi (allowlist XSS) di sini sehingga tidak ada
+     * output mentah AI yang pernah menyentuh database.
      */
     public static function validate(array $q): ?array
     {
         $text = trim((string) ($q['question_text'] ?? ''));
         $opts = $q['options'] ?? [];
 
-        if ($text === '' || mb_strlen($text) > 1000) {
+        if ($text === '' || mb_strlen($text) > 20000) {
             return null;
         }
         if (! is_array($opts)) {
             return null;
         }
+
+        // Sanitasi HTML pertanyaan (allowlist). Kosong setelah strip = tidak
+        // ada konten layak → tolak.
+        $text = HtmlSanitizer::sanitizeQuestion($text);
+        if ($text === '' || mb_strlen($text) > HtmlSanitizer::MAX_QUESTION_CHARS) {
+            return null;
+        }
         foreach (['a', 'b', 'c', 'd'] as $k) {
-            $v = trim((string) ($opts[$k] ?? ''));
-            if ($v === '' || mb_strlen($v) > 300) {
+            $v = trim(HtmlSanitizer::sanitizeInline(strip_tags((string) ($opts[$k] ?? ''))));
+            if ($v === '' || mb_strlen($v) > HtmlSanitizer::MAX_OPTION_CHARS) {
                 return null;
             }
+            $opts[$k] = $v;
         }
 
         $correct = strtoupper(trim((string) ($q['correct_option'] ?? '')));
@@ -151,7 +167,7 @@ TXT;
             'option_d'        => $vals[3],
             'correct_option'  => $correct,
             'difficulty_level'=> $difficulty,
-            'explanation'     => trim((string) ($q['explanation'] ?? '')) ?: null,
+            'explanation'     => trim(HtmlSanitizer::sanitizeInline(strip_tags((string) ($q['explanation'] ?? '')))) ?: null,
             'source_section'  => trim((string) ($q['section'] ?? '')) ?: null,
         ];
     }
