@@ -3,6 +3,7 @@
 namespace App\Controllers\Admin;
 
 use App\Controllers\BaseController;
+use App\Libraries\MailService;
 use App\Models\AdminModel;
 use App\Models\AdImpressionModel;
 use App\Models\AdModel;
@@ -140,100 +141,13 @@ class Dashboard extends BaseController
                  . "segera hubungi tim teknis — kemungkinan akun Anda telah disalahgunakan.\n\n"
                  . "--\n" . app_name();
 
-        if (! function_exists('curl_init')) {
-            return ['ok' => false, 'message' => 'Ekstensi cURL tidak tersedia di server.'];
-        }
+        $html = '<p>Halo ' . esc($name) . ',</p>'
+              . '<p>Password akun admin Anda baru saja berhasil diubah.</p>'
+              . '<p>Password baru Anda: <strong>' . esc($newPassword) . '</strong></p>'
+              . '<p>Simpan email ini sebagai catatan pribadi. Demi keamanan, segera hapus setelah Anda mencatat password di tempat aman.</p>'
+              . '<p>Jika Anda tidak merasa melakukan perubahan ini, segera hubungi tim teknis — kemungkinan akun Anda telah disalahgunakan.</p>'
+              . '<p>--<br>' . esc(app_name()) . '</p>';
 
-        return $this->dispatchMail($to, $subject, $body);
-    }
-
-    /**
-     * Generic email dispatcher: coba Gmail (webriau.com) dulu, fallback
-     * ke Turbo-SMTP jika gagal. Mengikuti pola yang sama dengan
-     * Auth::sendOtpEmail() / Auth::sendPasswordResetEmail().
-     */
-    private function dispatchMail(string $to, string $subject, string $body): array
-    {
-        $gmail = $this->sendViaGmail($to, $subject, $body);
-        if ($gmail['ok']) {
-            return $gmail;
-        }
-        return $this->sendViaTurboSmtp($to, $subject, $body);
-    }
-
-    private function sendViaGmail(string $to, string $subject, string $body): array
-    {
-        $url    = (string) env('otp.mailApiUrl', 'https://gmail.webriau.com/servera.php');
-        $apiKey = (string) env('otp.mailApiKey', 'b5d4c11bd3854a159b1ac9b417eec952d726eb0e037099f46925e3ea381b0128');
-
-        $payload = http_build_query([
-            'to'      => $to,
-            'subject' => $subject,
-            'body'    => $body,
-        ]);
-
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/x-www-form-urlencoded',
-            'X-API-Key: ' . $apiKey,
-        ]);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
-
-        $response  = curl_exec($ch);
-        $httpCode  = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlError = curl_error($ch);
-        curl_close($ch);
-
-        if ($curlError !== '') {
-            return ['ok' => false, 'message' => 'Kesalahan jaringan: ' . $curlError];
-        }
-        if ($httpCode < 200 || $httpCode >= 300) {
-            return ['ok' => false, 'message' => 'Server email menolak permintaan (HTTP ' . $httpCode . ').'];
-        }
-        return ['ok' => true, 'message' => 'OK'];
-    }
-
-    private function sendViaTurboSmtp(string $to, string $subject, string $body): array
-    {
-        $url            = 'https://api.turbo-smtp.com/api/v2/mail/send';
-        $consumerKey    = (string) env('turboSmtp.consumerKey', 'eda1805b1b910db73358');
-        $consumerSecret = (string) env('turboSmtp.consumerSecret', 'h31XlvNIOA7txmCUnPGr');
-
-        $data = [
-            'from'         => 'noreply@kursuscerdas.com',
-            'to'           => $to,
-            'subject'      => $subject,
-            'content'      => $body,
-            'html_content' => '<p>' . nl2br(esc($body)) . '</p>',
-        ];
-
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-            'consumerKey: ' . $consumerKey,
-            'consumerSecret: ' . $consumerSecret,
-        ]);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-        $response  = curl_exec($ch);
-        $httpCode  = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlError = curl_error($ch);
-        curl_close($ch);
-
-        if ($curlError !== '') {
-            return ['ok' => false, 'message' => 'TurboSMTP: ' . $curlError];
-        }
-        if ($httpCode < 200 || $httpCode >= 300) {
-            return ['ok' => false, 'message' => 'TurboSMTP HTTP ' . $httpCode];
-        }
-        return ['ok' => true, 'message' => 'OK'];
+        return (new MailService())->send($to, $subject, $html, $body);
     }
 }

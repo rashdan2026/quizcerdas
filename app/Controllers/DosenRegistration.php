@@ -2,6 +2,7 @@
 
 namespace App\Controllers;
 
+use App\Libraries\MailService;
 use App\Models\LecturerModel;
 use App\Models\LecturerRegistrationModel;
 
@@ -324,15 +325,11 @@ class DosenRegistration extends BaseController
     }
 
     // ==================== Pengiriman email ====================
-    // Menggunakan kanal email yang sama dengan aplikasi
-    // (Gmail webriau.com, fallback Turbo-SMTP) via env configuration.
+    // Dikirim melalui MailService (provider dipilih lewat konfigurasi:
+    // resend / gmail / webriau).
 
     private function sendVerificationEmail(string $to, string $name, string $code): array
     {
-        if (! function_exists('curl_init')) {
-            return ['ok' => false, 'message' => 'Ekstensi cURL tidak tersedia di server.'];
-        }
-
         $subject = 'Kode Verifikasi Pendaftaran Dosen - ' . app_name();
         $html = $this->buildVerificationEmailHtml($name, $code);
         $text = "Halo {$name},\n\n"
@@ -341,12 +338,7 @@ class DosenRegistration extends BaseController
             . "Jangan berikan kode ini kepada siapa pun.\n\n"
             . "Salam,\nAdmin " . app_name();
 
-        $gmailResult = $this->sendViaGmail($to, $subject, $html, $text);
-        if ($gmailResult['ok']) {
-            return $gmailResult;
-        }
-
-        return $this->sendViaTurboSmtp($to, $subject, $html, $text);
+        return (new MailService())->send($to, $subject, $html, $text);
     }
 
     private function buildVerificationEmailHtml(string $name, string $code): string
@@ -371,104 +363,5 @@ class DosenRegistration extends BaseController
             . '<p style="color:#B91C1C;font-size:13px;margin:0 0 20px;"><strong>Peringatan:</strong> Jangan berikan kode ini kepada siapa pun, termasuk pihak yang mengaku admin.</p>'
             . '<p style="color:#94A3B8;font-size:12px;margin:0;">Jika Anda tidak merasa mendaftar, abaikan email ini.</p>'
             . '</div></div></body></html>';
-    }
-
-    private function sendViaGmail(string $to, string $subject, string $html, string $text): array
-    {
-        $serverAUrl = (string) env('otp.mailApiUrl', 'https://gmail.webriau.com/servera.php');
-        $apiKey     = (string) env('otp.mailApiKey');
-
-        if ($apiKey === '') {
-            return ['ok' => false, 'message' => 'Konfigurasi email (otp.mailApiKey) belum diatur.'];
-        }
-
-        $payload = [
-            'to'      => $to,
-            'subject' => $subject,
-            'body'    => $text,
-            'html'    => $html,
-        ];
-
-        return $this->postForm($serverAUrl, $payload, ['X-API-Key: ' . $apiKey]);
-    }
-
-    private function sendViaTurboSmtp(string $to, string $subject, string $html, string $text): array
-    {
-        $url            = 'https://api.turbo-smtp.com/api/v2/mail/send';
-        $consumerKey    = (string) env('turboSmtp.consumerKey');
-        $consumerSecret = (string) env('turboSmtp.consumerSecret');
-
-        if ($consumerKey === '' || $consumerSecret === '') {
-            return ['ok' => false, 'message' => 'Konfigurasi email (turboSmtp) belum diatur.'];
-        }
-
-        $data = [
-            'from'         => 'noreply@kursuscerdas.com',
-            'to'           => $to,
-            'subject'      => $subject,
-            'content'      => $text,
-            'html_content' => $html,
-        ];
-
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-            'consumerKey: ' . $consumerKey,
-            'consumerSecret: ' . $consumerSecret,
-        ]);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-
-        $response = curl_exec($ch);
-        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlError = curl_error($ch);
-        curl_close($ch);
-
-        if ($curlError !== '') {
-            return ['ok' => false, 'message' => 'Turbo-SMTP error: ' . $curlError];
-        }
-
-        if ($httpCode < 200 || $httpCode >= 300) {
-            return ['ok' => false, 'message' => 'Turbo-SMTP gagal mengirim email (HTTP ' . $httpCode . ')'];
-        }
-
-        return ['ok' => true, 'message' => 'OK (via Turbo-SMTP)'];
-    }
-
-    private function postForm(string $url, array $payload, array $headers): array
-    {
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($payload));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, array_merge([
-            'Content-Type: application/x-www-form-urlencoded',
-        ], $headers));
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
-
-        $response  = curl_exec($ch);
-        $httpCode  = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlError = curl_error($ch);
-        curl_close($ch);
-
-        if ($curlError !== '') {
-            return ['ok' => false, 'message' => 'Kesalahan jaringan: ' . $curlError];
-        }
-
-        if ($httpCode < 200 || $httpCode >= 300) {
-            $responseData = json_decode((string) $response, true);
-            $errorText    = is_array($responseData) && isset($responseData['message'])
-                ? (string) $responseData['message']
-                : 'HTTP ' . $httpCode;
-
-            return ['ok' => false, 'message' => 'Server email menolak permintaan (' . $errorText . ').'];
-        }
-
-        return ['ok' => true, 'message' => 'OK'];
     }
 }
