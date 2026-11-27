@@ -52,6 +52,11 @@ class QuestionGenerationService
     private const VERIFY_TIMEOUT_SEC   = 45;
     private const MIN_STEP_SECONDS     = 15;
 
+    /** Maksimum soal yang diminta per SATU call AI (pecah target besar agar
+     * durasi tiap call jauh di bawah timeout — model lambat/free OpenRouter
+     * kerap tidak selesai menghasilkan 20 soal JSON dalam 120 detik). */
+    private const MAX_PER_CALL = 10;
+
     private QuizBatchModel $batches;
     private QuizQuestionModel $questions;
     private AIProviderManager $ai;
@@ -66,6 +71,12 @@ class QuestionGenerationService
     private function tokenLimit(): int
     {
         return (int) (env('quiz.maxBatchTokens') ?? self::MAX_BATCH_TOKENS);
+    }
+
+    /** Timeout satu call generate (detik); dapat dioverride via env quiz.generateTimeout. */
+    private function generateTimeout(): int
+    {
+        return max(30, (int) (env('quiz.generateTimeout') ?? self::GENERATE_TIMEOUT_SEC));
     }
 
     // ==================== Alokasi difficulty ====================
@@ -220,14 +231,8 @@ class QuestionGenerationService
             $checker->add('e' . $row['id'], (string) $row['question_text']);
         }
 
-        $chunks      = $this->buildChunks((string) $extraction['text']);
-        $system      = QuestionSchema::systemPrompt();
-        $targetAlloc = self::allocateCounts(
-            $target,
-            (int) $batch['difficulty_easy_pct'],
-            (int) $batch['difficulty_medium_pct'],
-            (int) $batch['difficulty_hard_pct']
-        );
+        $chunks = $this->buildChunks((string) $extraction['text']);
+        $system = QuestionSchema::systemPrompt();
 
         $accepted = [];   // key => soal valid & unik pada batch ini (independen per soal)
         $got      = ['easy' => 0, 'medium' => 0, 'hard' => 0];
@@ -256,13 +261,19 @@ class QuestionGenerationService
 
             $stats['rounds']++;
             $round = $stats['rounds'];
-            $need  = $target - count($accepted);
+            // Pecah target besar menjadi call-call kecil: model butuh ~6.000-9.000
+            // token output untuk 20 soal JSON dan kerap melewati timeout di provider
+            // lambat. Maks 10 soal per call menjaga durasi tiap call tetap aman.
+            $need  = min($target - count($accepted), self::MAX_PER_CALL);
 
-            // Sisa alokasi per tingkat (komposisi akhir tetap mengikuti persentase).
-            $alloc = [];
-            foreach ($targetAlloc as $level => $planned) {
-                $alloc[$level] = max(0, (int) $planned - (int) $got[$level]);
-            }
+            // Alokasi per call dihitung ulang dari persentase asli agar komposisi
+            // difficulty tetap mengikuti rencana meski target dipatah-batahkan.
+            $alloc = self::allocateCounts(
+                $need,
+                (int) $batch['difficulty_easy_pct'],
+                (int) $batch['difficulty_medium_pct'],
+                (int) $batch['difficulty_hard_pct']
+            );
 
             // Chunk dipilih bergilir agar putaran pengganti memakai materi yang berbeda.
             $chunk = $chunks[($round - 1) % count($chunks)];
@@ -278,7 +289,7 @@ class QuestionGenerationService
                 QuestionSchema::userPrompt($chunk, $alloc, $need, $existing, $avoid),
                 $logCtx + ['requested_count' => $need, 'received_count' => count($accepted), 'duplicate_count' => $stats['duplicates']],
                 $round,
-                ['timeout' => (int) min(self::GENERATE_TIMEOUT_SEC, self::TIME_BUDGET_SEC - $elapsed)]
+                ['timeout' => (int) min($this->generateTimeout(), self::TIME_BUDGET_SEC - $elapsed)]
             );
 
             $this->accountTokens($stats, $res);
@@ -488,8 +499,23 @@ class QuestionGenerationService
         if (($stats['last_error'] ?? null) === 'no_provider') {
             return 'Layanan AI belum dikonfigurasi. Hubungi administrator. Tidak ada soal yang dibuat.';
         }
+
         if ($stats['duplicates'] === 0 && $stats['invalid'] === 0) {
-            return 'Layanan AI tidak dapat dihubungi saat ini. Tidak ada soal yang dibuat. Silakan coba lagi beberapa saat; bila berulang, hubungi administrator.';
+            $hint = match ($stats['last_error'] ?? null) {
+                'timeout'          => 'Panggilan ke layanan AI melewati batas waktu.',
+                'connection'       => 'Server aplikasi gagal terhubung ke layanan AI.',
+                'auth'             => 'API key ditolak oleh penyedia AI (cek konfigurasi provider).',
+                'rate_limit'       => 'Kuota/batas pemakaian penyedia AI tercapai (rate limit).',
+                'http_5xx'         => 'Server penyedia AI sedang bermasalah.',
+                'http_error'       => 'Penyedia AI menolak request (cek model/konfigurasi provider).',
+                'empty_content'    => 'Penyedia AI mengembalikan respons kosong (budget output model kemungkinan terlalu kecil).',
+                'invalid_response' => 'Respons penyedia AI tidak dapat dibaca.',
+                default            => null,
+            };
+
+            return 'Layanan AI tidak dapat dihubungi saat ini'
+                . ($hint !== null ? ' (' . $hint . ')' : '.')
+                . ' Tidak ada soal yang dibuat. Silakan coba lagi beberapa saat; bila berulang, hubungi administrator.';
         }
 
         return 'Tidak ada soal baru yang unik dan valid dari PDF ini (' . $stats['duplicates'] . ' kandidat duplikat, '
