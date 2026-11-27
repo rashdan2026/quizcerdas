@@ -169,15 +169,35 @@ class Auth extends BaseController
             return redirect()->back()->withInput()->with('error', 'Kredensial dosen tidak valid.');
         }
 
+        // Akun dosen harus aktif dan email institusinya terverifikasi.
+        // Dosen yang belum verifikasi (hasil registrasi mandiri) tidak boleh login.
+        if (empty($lecturer['is_active']) || empty($lecturer['email_verified'])) {
+            $this->generateCaptcha();
+
+            return redirect()->back()->withInput()->with('error', 'Akun dosen belum aktif atau email belum terverifikasi.');
+        }
+
+        $profileConfirmed = ! empty($lecturer['profile_confirmed']);
+
         $lecturerModel->update($lecturer['id'], ['last_login' => date('Y-m-d H:i:s')]);
+
+        // Session regeneration setelah autentikasi sukses.
+        $session->regenerate();
         $session->set([
-            'logged_in' => true,
-            'role'      => 'lecturer',
-            'user_id'   => $lecturer['id'],
-            'user_name' => $lecturer['nama'],
+            'logged_in'         => true,
+            'role'              => 'lecturer',
+            'user_id'           => $lecturer['id'],
+            'user_name'         => $lecturer['nama'],
+            'profile_confirmed' => $profileConfirmed,
         ]);
 
         (new AdService())->clearCurrentView();
+
+        // Login pertama: wajib konfirmasi profil sebelum masuk dashboard.
+        if (! $profileConfirmed) {
+            return redirect()->to('/lecturer/confirm-profile')
+                ->with('info', 'Ini login pertama Anda. Silakan periksa dan konfirmasi data profil terlebih dahulu.');
+        }
 
         return redirect()->to('/lecturer/subjects')->with('success', 'Login dosen berhasil.');
     }

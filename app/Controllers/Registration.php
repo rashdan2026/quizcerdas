@@ -21,6 +21,15 @@ class Registration extends BaseController
         return view('auth/register', $data);
     }
 
+    /**
+     * Halaman pemilihan jenis pendaftaran (mahasiswa / dosen).
+     * Pengguna memilih kotak secara vertikal lalu menekan Lanjutkan.
+     */
+    public function choice()
+    {
+        return view('auth/register_choice');
+    }
+
     public function register()
     {
         if ($this->request->getMethod() !== 'POST') {

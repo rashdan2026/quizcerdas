@@ -10,11 +10,23 @@ $routes->get('/', 'Home::index');
 $routes->match(['get', 'post'], 'auth', 'Auth::index');
 $routes->post('auth/login', 'Auth::login');
 
-$routes->get('register', 'Registration::index');
+// ===================== Pendaftaran =====================
+// Halaman pemilihan jenis pendaftaran (mahasiswa / dosen).
+$routes->get('register', 'Registration::choice');
+// Pendaftaran mahasiswa (alur lama tetap berjalan).
+$routes->get('register/mahasiswa', 'Registration::index');
 $routes->post('register', 'Registration::register');
+$routes->post('register/mahasiswa', 'Registration::register');
 $routes->get('register/verify-email', 'Registration::verifyEmail');
 $routes->post('register/verify-email', 'Registration::confirmVerify');
 $routes->post('register/resend-otp', 'Registration::resendOtp');
+// Pendaftaran dosen (email institusi .ac.id + kode verifikasi).
+$routes->get('register/dosen', 'DosenRegistration::index');
+$routes->post('register/dosen', 'DosenRegistration::register');
+$routes->get('register/dosen/verify-email', 'DosenRegistration::verifyEmail');
+$routes->post('register/dosen/verify-email', 'DosenRegistration::confirmVerify');
+$routes->post('register/dosen/resend', 'DosenRegistration::resendCode');
+
 $routes->match(['get', 'post'], 'auth/otp', 'Auth::otp');
 $routes->match(['get', 'post'], 'auth/change-password', 'Auth::changePassword');
 $routes->match(['get', 'post'], 'auth/forgot-password', 'Auth::forgotPassword');
@@ -79,6 +91,10 @@ $routes->group('admin', static function ($routes) {
 });
 
 $routes->group('lecturer', ['filter' => 'authguard:lecturer'], static function ($routes) {
+    // Konfirmasi profil login pertama (dosen hasil registrasi mandiri).
+    $routes->match(['get', 'post'], 'confirm-profile', 'Lecturer\FirstLogin::index');
+    $routes->post('confirm-profile/save', 'Lecturer\FirstLogin::confirm');
+
     $routes->get('subjects', 'Lecturer\Subject::index');
     $routes->get('subjects/export/(:num)', 'Lecturer\Subject::exportXls/$1');
     $routes->match(['get', 'post'], 'subjects/create', 'Lecturer\Subject::create');

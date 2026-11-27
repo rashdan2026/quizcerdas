@@ -42,6 +42,17 @@ class AuthGuard implements FilterInterface
             return redirect()->to('/admin/dashboard');
         }
 
+        // Gerbang first login dosen: akun hasil registrasi mandiri wajib
+        // menyelesaikan konfirmasi profil sebelum dapat mengakses fasilitas dosen.
+        // Keputusan didasarkan pada session yang dibuat dari data DB saat login.
+        if ($activeRole === 'lecturer'
+            && $session->get('profile_confirmed') !== true
+            && strpos(ltrim(uri_string(), '/'), 'lecturer/confirm-profile') !== 0
+        ) {
+            return redirect()->to('/lecturer/confirm-profile')
+                ->with('info', 'Silakan konfirmasi profil Anda terlebih dahulu.');
+        }
+
         return null;
     }
 

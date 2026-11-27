@@ -24,6 +24,36 @@
                     </label>
                     <div class="fw-500"><?= esc($user['email']) ?></div>
                 </div>
+                <?php if ($role === 'lecturer'): ?>
+                <div class="alert alert-light border py-2 px-3 small text-muted d-flex align-items-start gap-2 mb-3">
+                    <i class="bi bi-lock-fill mt-1 flex-shrink-0"></i>
+                    <span>Profil dosen bersifat <strong>hanya-baca</strong> setelah konfirmasi pertama dan tidak dapat diubah melalui aplikasi.</span>
+                </div>
+                <?php if (!empty($user['jenis_kelamin'])): ?>
+                <div class="mb-3">
+                    <label class="text-muted small mb-1">
+                        <i class="bi bi-person me-1"></i>Jenis Kelamin
+                    </label>
+                    <div class="fw-500"><?= esc($user['jenis_kelamin']) ?></div>
+                </div>
+                <?php endif; ?>
+                <?php if (!empty($user['tanggal_lahir'])): ?>
+                <div class="mb-3">
+                    <label class="text-muted small mb-1">
+                        <i class="bi bi-calendar-event me-1"></i>Tanggal Lahir
+                    </label>
+                    <div class="fw-500"><?= esc(date('d/m/Y', strtotime($user['tanggal_lahir']))) ?></div>
+                </div>
+                <?php endif; ?>
+                <?php if (!empty($user['nama_kampus'])): ?>
+                <div class="mb-3">
+                    <label class="text-muted small mb-1">
+                        <i class="bi bi-bank me-1"></i>Nama Kampus
+                    </label>
+                    <div class="fw-500"><?= esc($user['nama_kampus']) ?></div>
+                </div>
+                <?php endif; ?>
+                <?php endif; ?>
                 <?php if ($role === 'student' && !empty($user['npm'])): ?>
                 <div class="mb-3">
                     <label class="text-muted small mb-1">
