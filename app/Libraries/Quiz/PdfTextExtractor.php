@@ -152,6 +152,11 @@ class PdfTextExtractor
     /** Bersihkan header/footer berulang, nomor halaman, whitespace berlebih. */
     private function clean(string $text): string
     {
+        // Buang byte UTF-8 invalid dari stream biner. Tanpa ini json_encode()
+        // payload request AI gagal dan provider menolak dengan 400.
+        $scrub = @iconv('UTF-8', 'UTF-8//IGNORE', $text);
+        $text  = ($scrub === false) ? mb_convert_encoding($text, 'UTF-8', 'UTF-8') : $scrub;
+
         // Tanpa modifier /u: teks mentah dari stream biner bisa invalid UTF-8
         // yang membuat preg_split /u gagal (null) dan seluruh teks terbuang.
         $lines  = preg_split('/\n/', $text) ?: [];
@@ -163,8 +168,20 @@ class PdfTextExtractor
             if ($l === '' || ! preg_match('/[\x20-\x7E]/', $l)) {
                 continue; // buang baris kosong / baris biner non-printable
             }
+
+            // Saring sampah glyph-ID font CID/Type0: baris harus hampir seluruhnya
+            // printable dan mengandung run huruf nyata (>= 4 huruf berurutan).
+            // Byte acak sering lolos filter printable, tapi tidak membentuk kata.
+            $len       = strlen($l);
+            $printable = preg_match_all('/[\x20-\x7E]/', $l);
+            if ($len > 0 && $printable / $len < 0.9) {
+                continue;
+            }
+            if (! preg_match('/[A-Za-z]{4,}/', $l)) {
+                continue;
+            }
+
             $parsed[] = $l;
-            $len      = strlen($l);
             if ($len > 2 && $len < 90) {
                 $freq[$l] = ($freq[$l] ?? 0) + 1;
             }

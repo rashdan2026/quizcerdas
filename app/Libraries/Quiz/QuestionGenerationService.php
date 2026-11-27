@@ -665,6 +665,17 @@ class QuestionGenerationService
             return [];
         }
 
+        // Teks hasil ekstraksi PDF bisa mengandung byte UTF-8 tidak valid.
+        // Jika dibiarkan, json_encode() payload request gagal dan provider AI
+        // menolak dengan 400 "JSON parsing failed". Bersihkan ke UTF-8 valid.
+        $clean = @iconv('UTF-8', 'UTF-8//IGNORE', $text);
+        $text  = ($clean === false) ? mb_convert_encoding($text, 'UTF-8', 'UTF-8') : $clean;
+        $text  = preg_replace('/[\x{FFFD}\x00-\x08\x0B\x0C\x0E-\x1F]/u', ' ', $text) ?? $text;
+        $text  = trim($text);
+        if ($text === '') {
+            return [];
+        }
+
         $len = mb_strlen($text);
         $max = self::CHUNK_CHARS;
 

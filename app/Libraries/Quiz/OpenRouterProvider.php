@@ -128,7 +128,24 @@ class OpenRouterProvider implements AIProviderInterface
             $body['reasoning'] = ['enabled' => (bool) $reasoning];
         }
 
-        $payload = json_encode($body, JSON_UNESCAPED_UNICODE);
+        $payload = json_encode($body, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+
+        // json_encode gagal (teks mengandung byte UTF-8 tidak valid dari PDF):
+        // bersihkan semua string ke UTF-8 valid lalu encode ulang — jangan
+        // pernah mengirim body rusak yang bikin provider menolak dengan 400.
+        if ($payload === false) {
+            array_walk_recursive($body, static function (&$v): void {
+                if (is_string($v)) {
+                    $clean = @iconv('UTF-8', 'UTF-8//IGNORE', $v);
+                    $v     = ($clean === false) ? mb_convert_encoding($v, 'UTF-8', 'UTF-8') : $clean;
+                }
+            });
+            $payload = json_encode($body, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        }
+
+        if ($payload === false) {
+            return $this->fail('invalid_response', null, (int) ((microtime(true) - $start) * 1000));
+        }
 
         $ch = curl_init($url);
         curl_setopt_array($ch, [
