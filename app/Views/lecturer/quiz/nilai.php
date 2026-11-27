@@ -27,7 +27,7 @@
                 <th class="text-center">Skor</th><th class="text-center">Persentase</th><th>Waktu</th><th>Kode Kuis</th>
             </tr></thead>
             <tbody>
-            <?php $no = 1; foreach ($grades as $g): ?>
+            <?php $no = (int) ($offset ?? (($page - 1) * ($perPage ?? 0))) + 1; foreach ($grades as $g): ?>
                 <tr>
                     <td><?= $no++ ?></td>
                     <td><code><?= esc((string) ($g['npm'] ?? '-')) ?></code></td>

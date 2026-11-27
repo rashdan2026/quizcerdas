@@ -388,6 +388,8 @@ class Quiz extends BaseController
             'grades'   => $grades,
             'search'   => $search,
             'page'     => $page,
+            'perPage'  => $perPage,
+            'offset'   => $offset, // dasar nomor urut global: ((page-1) * perPage)
             'totalPage'=> $totalPage,
             'total'    => $total,
         ]);

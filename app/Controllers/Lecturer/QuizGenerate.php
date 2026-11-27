@@ -599,13 +599,17 @@ class QuizGenerate extends BaseController
         $contentLength = (int) ($this->request->getServer('CONTENT_LENGTH') ?? 0);
         $postLimit = $this->iniBytes((string) ini_get('post_max_size'));
         if ($contentLength > 0 && $postLimit > 0 && $contentLength > $postLimit) {
-            return 'Ukuran file PDF melewati batas upload server (post_max_size). Batas aplikasi adalah 10 MB; kompres PDF atau pecah menjadi beberapa file di bawah 10 MB, lalu coba lagi.';
+            return 'Ukuran file PDF melewati batas upload server (post_max_size = ' . ini_get('post_max_size')
+                . '). Batas aplikasi adalah 10 MB; administrator dapat menaikkan batas PHP (upload_max_filesize & post_max_size, mis. via public/.user.ini atau panel hosting), atau kompres PDF menjadi di bawah '
+                . ini_get('post_max_size') . ', lalu coba lagi.';
         }
 
         if ($file !== null && method_exists($file, 'getError')) {
             return match ((int) $file->getError()) {
                 UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE =>
-                    'Ukuran file PDF melewati batas upload server. Batas aplikasi adalah 10 MB; kompres PDF atau pecah menjadi beberapa file di bawah 10 MB, lalu coba lagi.',
+                    'Ukuran file PDF melewati batas upload PHP server (upload_max_filesize = ' . ini_get('upload_max_filesize')
+                    . '). Batas aplikasi adalah 10 MB; administrator dapat menaikkan batas PHP (upload_max_filesize & post_max_size, mis. via public/.user.ini atau panel hosting), atau kompres PDF menjadi di bawah '
+                    . ini_get('upload_max_filesize') . ', lalu coba lagi.',
                 UPLOAD_ERR_PARTIAL =>
                     'Upload PDF terputus sebelum selesai. Periksa koneksi lalu unggah ulang.',
                 UPLOAD_ERR_NO_TMP_DIR =>
