@@ -16,10 +16,36 @@
                     <?= csrf_field() ?>
                     <div class="mb-3">
                         <label class="form-label"><i class="bi bi-person me-1"></i>Role</label>
-                        <select name="role" class="form-select" required>
+                        <select name="role" id="roleSelect" class="form-select" required data-old="<?= esc(old('role')) ?>">
                             <option value="student" <?= old('role') === 'student' ? 'selected' : '' ?>>🎓 Mahasiswa</option>
                             <option value="lecturer" <?= old('role') === 'lecturer' ? 'selected' : '' ?>>👨‍🏫 Dosen</option>
                         </select>
+                        <script>
+                        /* Remember last selected role (preferensi tampilan saja —
+                           bukan dasar hak akses; validasi role tetap di backend). */
+                        (function () {
+                            var KEY = 'kelasmerdeka_last_login_role';
+                            var sel = document.getElementById('roleSelect');
+
+                            // old() (rep populasi setelah error validasi) memiliki prioritas
+                            if ((sel.getAttribute('data-old') || '') === '') {
+                                var saved = null;
+                                try { saved = localStorage.getItem(KEY); } catch (e) { saved = null; }
+                                if (saved === 'student' || saved === 'lecturer') {
+                                    sel.value = saved;
+                                }
+                            }
+
+                            sel.addEventListener('change', function () {
+                                try { localStorage.setItem(KEY, sel.value); } catch (e) { /* abaikan */ }
+                            });
+
+                            // Simpan juga saat submit (mis. nilai diisi browser/autofill tanpa event change)
+                            sel.closest('form').addEventListener('submit', function () {
+                                try { localStorage.setItem(KEY, sel.value); } catch (e) { /* abaikan */ }
+                            });
+                        })();
+                        </script>
                     </div>
                     <div class="mb-3">
                         <label class="form-label"><i class="bi bi-person-badge me-1"></i>Email</label>
