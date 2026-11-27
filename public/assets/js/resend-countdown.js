@@ -20,10 +20,10 @@
 
     window.kmResendCountdown = function (btnId, labelId, originalLabel, waitTextId, waitInfoId) {
         var btn = document.getElementById(btnId);
-        if (!btn || btn.disabled) return;
+        if (!btn) return;
 
         var initial = parseInt(btn.getAttribute('data-wait') || '0', 10);
-        if (initial <= 0) return;
+        if (isNaN(initial) || initial <= 0) return;
 
         var label    = document.getElementById(labelId) || btn.querySelector('span');
         var waitText = waitTextId ? document.getElementById(waitTextId) : null;
