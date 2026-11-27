@@ -1,7 +1,7 @@
 <?php
 /** @var string $title */
 $title = $title ?? 'KelasMerdeka.com – Platform Perkuliahan Digital untuk Dosen dan Mahasiswa';
-$description = 'Kelola materi PDF, absensi QR Code, kuis online berbantuan AI, dan analisis hasil belajar mahasiswa dalam satu platform. Semua fitur tersedia tanpa biaya berlangganan.';
+$description = 'Platform pembelajaran digital untuk membantu dosen dan mahasiswa mengelola materi, presensi QR Code, kuis online berbantuan AI, dan hasil belajar dalam satu tempat.';
 $base = rtrim(base_url(), '/');
 ?>
 <!DOCTYPE html>
@@ -80,9 +80,8 @@ $base = rtrim(base_url(), '/');
         </nav>
 
         <div class="km-nav-actions">
-            <span class="km-nav-note"><svg aria-hidden="true"><use href="#i-check-circle"/></svg>Tanpa Biaya Berlangganan</span>
             <a href="<?= base_url('/auth') ?>" class="km-btn km-btn-outline km-btn-sm">Login</a>
-            <a href="<?= base_url('/register/dosen') ?>" class="km-btn km-btn-primary km-btn-sm">Daftar Dosen</a>
+            <a href="<?= base_url('/register') ?>" class="km-btn km-btn-primary km-btn-sm">Daftar</a>
         </div>
 
         <button class="km-nav-toggle" id="navToggle" aria-controls="mobileMenu" aria-expanded="false" aria-label="Buka menu navigasi">
@@ -98,8 +97,7 @@ $base = rtrim(base_url(), '/');
         <a href="#cara-kerja" data-close-menu>Cara Kerja</a>
         <a href="#tentang" data-close-menu>Tentang</a>
         <a href="<?= base_url('/auth') ?>" class="km-btn km-btn-outline">Login</a>
-        <a href="<?= base_url('/register/dosen') ?>" class="km-btn km-btn-primary">Daftar Dosen</a>
-        <div class="km-mobile-note">Tanpa biaya berlangganan bulanan maupun tahunan.</div>
+        <a href="<?= base_url('/register') ?>" class="km-btn km-btn-primary">Daftar</a>
     </div>
 </header>
 
@@ -112,23 +110,18 @@ $base = rtrim(base_url(), '/');
             <span class="km-eyebrow"><svg aria-hidden="true"><use href="#i-graduation"/></svg>Platform Perkuliahan Digital</span>
             <h1>Mengajar Lebih Mudah,<br><span>Mengelola Kelas Lebih Cerdas.</span></h1>
             <p class="km-hero-sub">
-                KelasMerdeka membantu dosen mengelola materi perkuliahan, absensi, dan kuis online
-                dalam satu tempat. Lebih praktis, lebih terorganisir, dan mudah digunakan.
+                Platform pembelajaran digital untuk membantu Dosen dan Mahasiswa menjalankan
+                aktivitas perkuliahan secara lebih praktis, terstruktur, dan terintegrasi.
             </p>
 
-            <div class="km-price-line">
-                <svg aria-hidden="true"><use href="#i-check-circle"/></svg>
-                <div>
-                    <strong>Semua Fitur, Tanpa Biaya Berlangganan.</strong>
-                    <span>Platform perkuliahan digital untuk membantu dosen dan mahasiswa menjalankan aktivitas akademik dengan lebih praktis.</span>
-                </div>
-            </div>
-
             <div class="km-hero-cta">
-                <a href="<?= base_url('/register/dosen') ?>" class="km-btn km-btn-primary">Daftar sebagai Dosen</a>
+                <a href="<?= base_url('/register') ?>" class="km-btn km-btn-primary">Daftar</a>
                 <a href="#fitur-dosen" class="km-btn km-btn-outline">Jelajahi Fitur</a>
             </div>
-            <p class="km-hero-foot">Mulai kelola perkuliahan Anda dengan lebih praktis.</p>
+            <p class="km-cost-note">
+                <svg aria-hidden="true"><use href="#i-check-circle"/></svg>
+                Tersedia tanpa biaya langganan bulanan untuk dosen dan mahasiswa.
+            </p>
         </div>
 
         <div class="km-hero-visual" aria-hidden="true">
@@ -219,7 +212,7 @@ $base = rtrim(base_url(), '/');
             </article>
         </div>
 
-        <p class="km-why-note"><strong>KelasMerdeka menyediakan seluruh fasilitas tersebut tanpa biaya berlangganan.</strong></p>
+        <p class="km-why-note"><strong>Satu alur kerja untuk materi, presensi, kuis, dan evaluasi hasil belajar.</strong></p>
     </div>
 </section>
 
@@ -229,7 +222,7 @@ $base = rtrim(base_url(), '/');
         <div class="km-section-head">
             <span class="km-kicker">Untuk Dosen</span>
             <h2>Dosen Punya Lebih Banyak Waktu untuk Mengajar, Bukan Sibuk Urusan Administrasi.</h2>
-            <p>KelasMerdeka menyediakan berbagai fitur yang membantu dosen mengelola kegiatan perkuliahan dengan lebih praktis. Seluruh fitur yang tersedia dapat digunakan tanpa biaya subscription bulanan maupun tahunan.</p>
+            <p>KelasMerdeka menyediakan berbagai fitur yang membantu dosen mengelola kegiatan perkuliahan dengan lebih praktis — dari materi hingga evaluasi hasil belajar.</p>
         </div>
 
         <div class="km-feature-grid">
@@ -385,9 +378,9 @@ $base = rtrim(base_url(), '/');
         <div class="km-cta-band">
             <div>
                 <h3>Saatnya Mengelola Perkuliahan dengan Lebih Praktis.</h3>
-                <p>Manfaatkan seluruh fasilitas KelasMerdeka untuk kegiatan perkuliahan Anda, tanpa perlu memikirkan biaya subscription.</p>
+                <p>Manfaatkan fitur KelasMerdeka untuk menyiapkan materi, presensi, kuis, dan evaluasi dalam satu alur kerja.</p>
             </div>
-            <a href="<?= base_url('/register/dosen') ?>" class="km-btn km-btn-light">Daftar Dosen Sekarang</a>
+            <a href="<?= base_url('/register') ?>" class="km-btn km-btn-light">Daftar</a>
         </div>
     </div>
 </section>
@@ -436,7 +429,7 @@ $base = rtrim(base_url(), '/');
                     </article>
                 </div>
                 <p class="km-student-cta">
-                    Belum punya akun? <a href="<?= base_url('/register/mahasiswa') ?>">Daftar sebagai Mahasiswa</a>
+                    Belum punya akun? <a href="<?= base_url('/register') ?>">Daftar</a>
                     &nbsp;·&nbsp; Sudah punya akun? <a href="<?= base_url('/auth') ?>">Login di sini</a>.
                 </p>
             </div>
@@ -449,24 +442,25 @@ $base = rtrim(base_url(), '/');
     <div class="km-container">
         <div class="km-section-head">
             <span class="km-kicker">Model Penggunaan</span>
-            <h2>Semua Fitur, Tanpa Biaya Berlangganan.</h2>
-            <p>KelasMerdeka.com hadir untuk membantu kegiatan perkuliahan tanpa membebani pengguna dengan biaya subscription. Dosen dan mahasiswa dapat menggunakan fitur-fitur aplikasi yang tersedia tanpa paket berlangganan bulanan maupun tahunan.</p>
+            <span class="km-kicker">Informasi Layanan</span>
+            <h2>Gunakan Fitur KelasMerdeka Tanpa Beban Langganan.</h2>
+            <p>Mulai gunakan berbagai fitur KelasMerdeka tanpa biaya berlangganan saat ini. Nikmati kemudahan pengelolaan pembelajaran melalui fitur yang tersedia, tanpa biaya langganan bulanan.</p>
         </div>
 
         <div class="km-price-card">
             <div class="km-price-top">
-                <span class="km-price-badge"><svg aria-hidden="true"><use href="#i-check-circle"/></svg>Tanpa Subscription</span>
-                <h3>Gunakan fitur sesuai kebutuhan perkuliahan Anda.</h3>
-                <p>Tidak ada paket Basic, Pro, Premium, maupun masa uji coba berbayar. Seluruh fasilitas aplikasi dapat digunakan sebagaimana mestinya.</p>
+                <span class="km-price-badge"><svg aria-hidden="true"><use href="#i-check-circle"/></svg>Informasi Biaya</span>
+                <h3>Fokus pada pembelajaran, bukan pada biaya langganan.</h3>
+                <p>KelasMerdeka dapat digunakan untuk mendukung kegiatan perkuliahan tanpa paket langganan bulanan maupun tahunan.</p>
             </div>
             <ul class="km-price-list">
-                <li><svg aria-hidden="true"><use href="#i-check"/></svg>Tidak ada subscription bulanan.</li>
-                <li><svg aria-hidden="true"><use href="#i-check"/></svg>Tidak ada subscription tahunan.</li>
-                <li><svg aria-hidden="true"><use href="#i-check"/></svg>Tidak ada paket Premium untuk membuka fitur.</li>
-                <li><svg aria-hidden="true"><use href="#i-check"/></svg>Fitur tersedia dapat digunakan sesuai fungsi dan ketentuan aplikasi.</li>
+                <li><svg aria-hidden="true"><use href="#i-check"/></svg>Tidak ada biaya langganan bulanan.</li>
+                <li><svg aria-hidden="true"><use href="#i-check"/></svg>Tidak ada biaya langganan tahunan.</li>
+                <li><svg aria-hidden="true"><use href="#i-check"/></svg>Tidak ada paket berbayar untuk membuka fitur.</li>
+                <li><svg aria-hidden="true"><use href="#i-check"/></svg>Penggunaan fitur mengikuti fungsi dan ketentuan layanan aplikasi.</li>
             </ul>
             <div class="km-price-foot">
-                <p>KelasMerdeka.com dikembangkan untuk mendukung proses belajar mengajar, bukan untuk menambah beban biaya pengguna.</p>
+                <p>Informasi ini disampaikan sebagai bagian dari transparansi layanan KelasMerdeka.com.</p>
             </div>
         </div>
     </div>
@@ -527,7 +521,7 @@ $base = rtrim(base_url(), '/');
                 <h2>Teknologi yang Membantu Proses Belajar Mengajar.</h2>
                 <p>KelasMerdeka.com hadir untuk membantu dosen dan mahasiswa menjalankan aktivitas perkuliahan secara lebih praktis, terstruktur, dan digital.</p>
                 <p class="km-quote">Kami percaya teknologi seharusnya membantu pekerjaan menjadi lebih mudah, bukan menambah kerumitan.</p>
-                <p>Platform perkuliahan digital dengan fitur-fitur yang dapat digunakan tanpa biaya berlangganan.</p>
+                <p>Platform perkuliahan digital untuk membantu dosen dan mahasiswa menjalankan kegiatan akademik sehari-hari.</p>
             </div>
 
             <div class="km-about-media">
@@ -569,7 +563,7 @@ $base = rtrim(base_url(), '/');
             </details>
             <details>
                 <summary>Apakah KelasMerdeka.com berbayar?</summary>
-                <div class="km-faq-body">KelasMerdeka.com tidak menerapkan biaya subscription bulanan maupun tahunan. Fitur-fitur yang tersedia dapat digunakan tanpa paket berlangganan.</div>
+                <div class="km-faq-body">KelasMerdeka tidak menerapkan biaya langganan bulanan maupun tahunan untuk fitur yang tersedia. Penggunaan layanan mengikuti fungsi dan ketentuan aplikasi.</div>
             </details>
             <details>
                 <summary>Apakah dosen dapat membuat soal menggunakan AI?</summary>
@@ -593,7 +587,7 @@ $base = rtrim(base_url(), '/');
             </details>
             <details>
                 <summary>Bagaimana cara mendaftar sebagai dosen?</summary>
-                <div class="km-faq-body">Klik tombol Daftar Dosen, pilih Pendaftaran Dosen, isi formulir, lalu verifikasi email institusi.</div>
+                <div class="km-faq-body">Klik tombol Daftar, pilih Pendaftaran Dosen, isi formulir, lalu verifikasi email institusi.</div>
             </details>
             <details>
                 <summary>Apakah mahasiswa juga dapat menggunakan aplikasi?</summary>
@@ -607,10 +601,9 @@ $base = rtrim(base_url(), '/');
 <section class="km-final">
     <div class="km-container">
         <h2>Yuk, Mulai Kelola Perkuliahan dengan Lebih Cerdas!</h2>
-        <p>Materi lebih tertata, soal lebih mudah dibuat, absensi lebih praktis, dan hasil belajar lebih mudah dievaluasi.</p>
-        <span class="km-price-inline"><svg aria-hidden="true"><use href="#i-check-circle"/></svg>Semua Fitur, Tanpa Biaya Berlangganan.</span>
+        <p>Materi lebih tertata, soal lebih mudah dibuat, presensi lebih praktis, dan hasil belajar lebih mudah dievaluasi — untuk dosen dan mahasiswa.</p>
         <div class="km-final-cta">
-            <a href="<?= base_url('/register/dosen') ?>" class="km-btn km-btn-light">Daftar sebagai Dosen</a>
+            <a href="<?= base_url('/register') ?>" class="km-btn km-btn-light">Daftar</a>
             <a href="<?= base_url('/auth') ?>" class="km-btn km-btn-ghost-light">Login ke KelasMerdeka</a>
         </div>
     </div>
@@ -627,8 +620,7 @@ $base = rtrim(base_url(), '/');
                     <span class="km-brand-mark"><svg aria-hidden="true"><use href="#i-graduation"/></svg></span>
                     <span>KelasMerdeka.com<small>Platform Perkuliahan Digital</small></span>
                 </a>
-                <p>Platform digital untuk membantu pengelolaan kegiatan perkuliahan.</p>
-                <p class="km-footer-note">Semua fitur, tanpa biaya berlangganan.</p>
+                <p>Platform digital untuk membantu pengelolaan kegiatan perkuliahan dosen dan mahasiswa.</p>
             </div>
             <div>
                 <h4>Navigasi</h4>
@@ -643,14 +635,13 @@ $base = rtrim(base_url(), '/');
                 <h4>Akun</h4>
                 <ul>
                     <li><a href="<?= base_url('/auth') ?>">Login</a></li>
-                    <li><a href="<?= base_url('/register/dosen') ?>">Daftar Dosen</a></li>
-                    <li><a href="<?= base_url('/register/mahasiswa') ?>">Daftar Mahasiswa</a></li>
+                    <li><a href="<?= base_url('/register') ?>">Daftar</a></li>
                 </ul>
             </div>
             <div>
                 <h4>Informasi</h4>
                 <ul>
-                    <li><a href="#biaya">Tanpa Biaya Berlangganan</a></li>
+                    <li><a href="#biaya">Informasi Biaya</a></li>
                     <li><a href="#faq">FAQ</a></li>
                     <li><a href="#tentang">Tentang</a></li>
                 </ul>

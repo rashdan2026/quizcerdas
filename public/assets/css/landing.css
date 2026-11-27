@@ -167,6 +167,11 @@ body.km-landing {
 
 .km-hero-cta { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
 .km-hero-foot { font-size: .86rem; color: var(--km-muted); }
+.km-cost-note {
+    display: flex; align-items: flex-start; gap: 7px;
+    font-size: .82rem; color: var(--km-muted); margin: 14px 0 0;
+}
+.km-cost-note svg { width: 14px; height: 14px; color: var(--km-green); flex-shrink: 0; margin-top: 2px; }
 
 .km-hero-visual { position: relative; min-height: 430px; }
 .km-mock {
