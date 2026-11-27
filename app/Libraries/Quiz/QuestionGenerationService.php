@@ -297,7 +297,11 @@ class QuestionGenerationService
 
             if (! $res['ok'] || $res['content'] === null) {
                 $stats['failed_calls']++;
-                $stats['last_error'] = $res['error_category'];
+                $stats['last_error']        = $res['error_category'];
+                $stats['last_error_detail'] = trim(
+                    ($res['error_category'] ?? '') . (isset($res['http_status']) ? ' (HTTP ' . $res['http_status'] . ')' : '')
+                    . (! empty($res['error_message']) ? ': ' . $res['error_message'] : '')
+                );
 
                 continue;
             }
@@ -512,6 +516,11 @@ class QuestionGenerationService
                 'invalid_response' => 'Respons penyedia AI tidak dapat dibaca.',
                 default            => null,
             };
+
+            $detail = trim((string) ($stats['last_error_detail'] ?? ''));
+            if ($detail !== '' && $detail !== ($stats['last_error'] ?? '')) {
+                $hint = ($hint !== null ? $hint . ' ' : '') . '[' . $detail . ']';
+            }
 
             return 'Layanan AI tidak dapat dihubungi saat ini'
                 . ($hint !== null ? ' (' . $hint . ')' : '.')

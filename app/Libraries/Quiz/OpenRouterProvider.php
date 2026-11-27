@@ -41,6 +41,27 @@ class OpenRouterProvider implements AIProviderInterface
     {
         $res = $this->attempt($systemPrompt, $userPrompt, $timeoutSec, $opts);
 
+        // HTTP 400 yang menyebut max_tokens / context length: budget output
+        // (default 8000) melebihi batas model di production. Ulangi sekali
+        // dengan anggaran yang lebih konservatif.
+        if (
+            ! $res['ok']
+            && $res['error_category'] === 'http_error'
+            && preg_match('/max[_ -]?tokens|context length|too large/i', (string) ($res['error_message'] ?? ''))
+        ) {
+            usleep(300000);
+            $opts['max_tokens'] = 4096;
+            $retry = $this->attempt($systemPrompt, $userPrompt, $timeoutSec, $opts);
+            if ($retry['ok']) {
+                $retry['latency_ms'] += $res['latency_ms'];
+
+                return $retry;
+            }
+            $retry['latency_ms'] += $res['latency_ms'];
+
+            return $retry;
+        }
+
         if ($res['ok'] || ! in_array($res['error_category'], self::RETRYABLE, true)) {
             return $res;
         }
@@ -135,21 +156,31 @@ class OpenRouterProvider implements AIProviderInterface
         }
 
         $json = json_decode((string) $raw, true);
+
+        // Pesan error asli dari upstream (penting untuk diagnosis di production:
+        // mis. "max_tokens is too large", "model not found", dsb).
+        $errMsg = '';
+        if (is_array($json)) {
+            $err    = $json['error'] ?? null;
+            $errMsg = is_array($err) ? (string) ($err['message'] ?? '') : (string) $err;
+            $errMsg = mb_substr(trim($errMsg), 0, 300);
+        }
+
         if (! is_array($json)) {
             return $this->fail('invalid_response', $httpCode ?: null, $latency);
         }
 
         if ($httpCode === 401 || $httpCode === 403) {
-            return $this->fail('auth', $httpCode, $latency);
+            return $this->fail('auth', $httpCode, $latency, $errMsg);
         }
         if ($httpCode === 429) {
-            return $this->fail('rate_limit', $httpCode, $latency);
+            return $this->fail('rate_limit', $httpCode, $latency, $errMsg);
         }
         if ($httpCode >= 500) {
-            return $this->fail('http_5xx', $httpCode, $latency);
+            return $this->fail('http_5xx', $httpCode, $latency, $errMsg);
         }
         if ($httpCode !== 200) {
-            return $this->fail('http_error', $httpCode, $latency);
+            return $this->fail('http_error', $httpCode, $latency, $errMsg);
         }
 
         $message = $json['choices'][0]['message'] ?? null;
@@ -193,10 +224,11 @@ class OpenRouterProvider implements AIProviderInterface
         return $parsed ?? true;
     }
 
-    protected function fail(string $category, ?int $http, int $latency): array
+    protected function fail(string $category, ?int $http, int $latency, string $errorMessage = ''): array
     {
         return [
             'ok' => false, 'content' => null, 'error_category' => $category,
+            'error_message' => $errorMessage,
             'http_status' => $http, 'latency_ms' => $latency,
             'tokens_prompt' => 0, 'tokens_completion' => 0, 'tokens_reasoning' => 0,
             'model' => $this->config['model'], 'finish_reason' => null,

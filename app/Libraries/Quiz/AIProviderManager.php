@@ -83,6 +83,7 @@ class AIProviderManager
             'ok'                => false,
             'content'           => null,
             'error_category'    => $last['error_category'] ?? 'no_provider',
+            'error_message'     => $last['error_message'] ?? '',
             'http_status'       => $last['http_status'] ?? null,
             'latency_ms'        => 0,
             'tokens_prompt'     => 0,
