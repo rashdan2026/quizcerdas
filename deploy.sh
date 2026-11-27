@@ -112,11 +112,25 @@ echo -e "\n${BLUE}📥 Mengecek repository GitHub...${NC}"
 # Cek apakah remote branch sudah ada
 if git ls-remote --heads origin $BRANCH | grep -q $BRANCH; then
     echo -e "${YELLOW}  Repository GitHub sudah ada, menarik perubahan terbaru...${NC}"
-    if git pull --rebase origin $BRANCH; then
-        echo -e "${GREEN}  ✓ Pull berhasil${NC}"
-    else
-        echo -e "${RED}❌ GAGAL PULL. Ada konflik dengan perubahan di GitHub.${NC}"
-        echo -e "${YELLOW}💡 Tips: Selesaikan konflik manual atau stash perubahan lokal Anda.${NC}"
+
+    # Retry: koneksi ke GitHub bisa ter-reset (masalah jaringan), coba ulang 3x
+    pulled=0
+    for i in 1 2 3; do
+        if git pull --rebase origin $BRANCH; then
+            echo -e "${GREEN}  ✓ Pull berhasil${NC}"
+            pulled=1
+            break
+        fi
+        if [ "$i" -lt 3 ]; then
+            echo -e "${YELLOW}  ⚠️  Pull gagal (percobaan $i dari 3), mengulang dalam 5 detik...${NC}"
+            sleep 5
+        fi
+    done
+    if [ "$pulled" -ne 1 ]; then
+        echo -e "${RED}❌ GAGAL PULL setelah 3 percobaan.${NC}"
+        echo -e "${YELLOW}💡 Kemungkinan penyebab:${NC}"
+        echo -e "${YELLOW}   - Koneksi internet tidak stabil / GitHub di-reset jaringan (coba lagi atau ganti jaringan/hotspot)${NC}"
+        echo -e "${YELLOW}   - Konflik dengan perubahan di GitHub (selesaikan manual atau: git stash, lalu deploy ulang)${NC}"
         exit 1
     fi
 else
@@ -124,14 +138,25 @@ else
     echo -e "${YELLOW}  → Skip pull, langsung push...${NC}"
 fi
 
-# 9. Push ke GitHub
+# 9. Push ke GitHub (retry 3x karena koneksi ke GitHub bisa ter-reset)
 echo -e "\n${BLUE}📤 Mengirim ke GitHub...${NC}"
-if git push -u origin $BRANCH; then
+pushed=0
+for i in 1 2 3; do
+    if git push -u origin $BRANCH; then
+        pushed=1
+        break
+    fi
+    if [ "$i" -lt 3 ]; then
+        echo -e "${YELLOW}  ⚠️  Push gagal (percobaan $i dari 3), mengulang dalam 5 detik...${NC}"
+        sleep 5
+    fi
+done
+if [ "$pushed" -eq 1 ]; then
     echo -e "\n${GREEN}------------------------------------------"
     echo -e "✅ BERHASIL! Kode sudah di GitHub."
     echo -e "🌐 Cek Plesk Anda, jika Webhook aktif maka web otomatis update."
     echo -e "------------------------------------------${NC}"
 else
-    echo -e "\n${RED}❌ GAGAL PUSH. Pastikan koneksi internet oke atau tidak ada konflik kode.${NC}"
+    echo -e "\n${RED}❌ GAGAL PUSH setelah 3 percobaan. Periksa koneksi internet Anda (coba ganti jaringan/hotspot) atau cek konflik kode.${NC}"
     exit 1
 fi

@@ -102,11 +102,25 @@ Write-Host "`n📥 Mengecek repository GitHub..." -ForegroundColor Blue
 $remoteBranchExists = git ls-remote --heads origin $BRANCH 2>$null
 if ($remoteBranchExists -match $BRANCH) {
     Write-Host "  Repository GitHub sudah ada, menarik perubahan terbaru..." -ForegroundColor Yellow
-    if (git pull --rebase origin $BRANCH) {
-        Write-Host "  ✓ Pull berhasil" -ForegroundColor Green
-    } else {
-        Write-Host "❌ GAGAL PULL. Ada konflik dengan perubahan di GitHub." -ForegroundColor Red
-        Write-Host "💡 Tips: Selesaikan konflik manual atau stash perubahan lokal Anda." -ForegroundColor Yellow
+
+    # Retry: koneksi ke GitHub bisa ter-reset (masalah jaringan), coba ulang 3x
+    $pulled = $false
+    foreach ($i in 1..3) {
+        if (git pull --rebase origin $BRANCH) {
+            Write-Host "  ✓ Pull berhasil" -ForegroundColor Green
+            $pulled = $true
+            break
+        }
+        if ($i -lt 3) {
+            Write-Host "  ⚠️  Pull gagal (percobaan $i dari 3), mengulang dalam 5 detik..." -ForegroundColor Yellow
+            Start-Sleep -Seconds 5
+        }
+    }
+    if (-not $pulled) {
+        Write-Host "❌ GAGAL PULL setelah 3 percobaan." -ForegroundColor Red
+        Write-Host "💡 Kemungkinan penyebab:" -ForegroundColor Yellow
+        Write-Host "   - Koneksi internet tidak stabil / GitHub di-reset jaringan (coba lagi atau ganti jaringan/hotspot)"
+        Write-Host "   - Konflik dengan perubahan di GitHub (selesaikan manual atau: git stash, lalu deploy ulang)"
         exit 1
     }
 } else {
@@ -114,14 +128,25 @@ if ($remoteBranchExists -match $BRANCH) {
     Write-Host "  → Skip pull, langsung push..." -ForegroundColor Yellow
 }
 
-# 9. Push ke GitHub
+# 9. Push ke GitHub (retry 3x karena koneksi ke GitHub bisa ter-reset)
 Write-Host "`n📤 Mengirim ke GitHub..." -ForegroundColor Blue
-if (git push -u origin $BRANCH) {
+$pushed = $false
+foreach ($i in 1..3) {
+    if (git push -u origin $BRANCH) {
+        $pushed = $true
+        break
+    }
+    if ($i -lt 3) {
+        Write-Host "  ⚠️  Push gagal (percobaan $i dari 3), mengulang dalam 5 detik..." -ForegroundColor Yellow
+        Start-Sleep -Seconds 5
+    }
+}
+if ($pushed) {
     Write-Host "`n------------------------------------------" -ForegroundColor Green
     Write-Host "✅ BERHASIL! Kode sudah di GitHub." -ForegroundColor Green
     Write-Host "🌐 Cek Plesk Anda, jika Webhook aktif maka web otomatis update." -ForegroundColor Green
     Write-Host "------------------------------------------" -ForegroundColor Green
 } else {
-    Write-Host "`n❌ GAGAL PUSH. Pastikan koneksi internet oke atau tidak ada konflik kode." -ForegroundColor Red
+    Write-Host "`n❌ GAGAL PUSH setelah 3 percobaan. Periksa koneksi internet Anda (coba ganti jaringan/hotspot) atau cek konflik kode." -ForegroundColor Red
     exit 1
 }
