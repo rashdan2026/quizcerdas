@@ -75,7 +75,10 @@ class QuizGenerate extends BaseController
                 : redirect()->to('/lecturer/quiz/' . $quizId)->with('error', $created['message']);
         }
 
-        $batchId = (int) $created['batch_id'];
+        $batchId     = (int) $created['batch_id'];
+        // Instruksi tambahan dosen: hanya hidup di memori selama request generate
+        // ini — TIDAK disimpan ke database, session, cache, maupun log.
+        $instruction = $created['instruction'] ?? null;
 
         if ($isAjax) {
             // Proses bisa berjalan lama: lepaskan kunci session agar request lain
@@ -88,7 +91,7 @@ class QuizGenerate extends BaseController
         ignore_user_abort(true);
         $this->raiseTimeLimit();
 
-        $result = $this->runGuarded($batchId);
+        $result = $this->runGuarded($batchId, $instruction);
 
         if ($isAjax) {
             return $this->json(['ok' => $result['ok']] + $this->batchPayload($this->batchModel->find($batchId)));
@@ -136,12 +139,25 @@ class QuizGenerate extends BaseController
      *
      * @return array{ok:bool, batch_id?:int, error?:string, message?:string}
      */
+    /** Batas panjang instruksi tambahan dosen (karakter, bukan byte). */
+    private const MAX_INSTRUCTION_CHARS = 1000;
+
     private function createBatch(int $quizId): array
     {
         // Jumlah soal: HANYA 5/10/15/20 — nilai lain ditolak walau request dimanipulasi.
         $count = (int) $this->request->getPost('question_count');
         if (! in_array($count, QuestionGenerationService::ALLOWED_COUNTS, true)) {
             return ['ok' => false, 'error' => 'invalid_count', 'message' => 'Jumlah soal hanya boleh 5, 10, 15, atau 20 soal untuk satu kali generate.'];
+        }
+
+        // Instruksi tambahan dosen (wajib): validasi backend, tidak mempercayai
+        // validasi JavaScript. Batas dihitung per KARAKTER (mb_strlen), bukan byte.
+        $instruction = $this->sanitizedInstruction();
+        if ($instruction === null) {
+            return ['ok' => false, 'error' => 'invalid_instruction', 'message' => 'Instruksi tambahan untuk AI wajib diisi (tidak boleh kosong atau hanya spasi).'];
+        }
+        if (mb_strlen($instruction) > self::MAX_INSTRUCTION_CHARS) {
+            return ['ok' => false, 'error' => 'instruction_too_long', 'message' => 'Instruksi tambahan untuk AI maksimal ' . self::MAX_INSTRUCTION_CHARS . ' karakter.'];
         }
 
         $file = $this->request->getFile('pdf_file');
@@ -273,7 +289,33 @@ class QuizGenerate extends BaseController
             'updated_at'     => date('Y-m-d H:i:s'),
         ]);
 
-        return ['ok' => true, 'batch_id' => $batchId];
+        return ['ok' => true, 'batch_id' => $batchId, 'instruction' => $instruction];
+    }
+
+    /**
+     * Ambil & bersihkan instruksi tambahan dosen dari request.
+     *
+     * - Trim awal/akhir; spasi saja dianggap kosong (null).
+     * - Buang karakter kontrol & byte UTF-8 invalid agar aman masuk payload
+     *   JSON ke provider AI (byte invalid bikin json_encode gagal → 400).
+     * - NILAINYA TIDAK PERNAH DISIMPAN: hanya dikembalikan untuk dipakai
+     *   prompt pada request generate ini.
+     */
+    private function sanitizedInstruction(): ?string
+    {
+        $raw  = (string) $this->request->getPost('ai_instruction');
+        $text = trim($raw);
+        if ($text === '') {
+            return null;
+        }
+
+        // Bersihkan byte UTF-8 invalid & karakter kontrol non-newline.
+        $clean = @iconv('UTF-8', 'UTF-8//IGNORE', $text);
+        $text  = ($clean === false) ? mb_convert_encoding($text, 'UTF-8', 'UTF-8') : $clean;
+        $text  = preg_replace('/[^\P{C}\n]/u', ' ', $text) ?? $text; // kontrol kecuali \n
+        $text  = trim($text);
+
+        return $text === '' ? null : $text;
     }
 
     /**
@@ -284,7 +326,7 @@ class QuizGenerate extends BaseController
      *
      * @return array{ok:bool, status:string, message:string}
      */
-    private function runGuarded(int $batchId): array
+    private function runGuarded(int $batchId, ?string $instruction = null): array
     {
         $finished = false;
         $db       = db_connect();
@@ -303,7 +345,7 @@ class QuizGenerate extends BaseController
         });
 
         try {
-            $result = (new QuestionGenerationService())->run($this->batchModel->find($batchId));
+            $result = (new QuestionGenerationService())->run($this->batchModel->find($batchId), $instruction);
         } catch (\Throwable $e) {
             $db->transRollback();
             log_message('error', 'QuizGenerate: batch #{batch} gagal: {msg}', ['batch' => $batchId, 'msg' => $e->getMessage()]);

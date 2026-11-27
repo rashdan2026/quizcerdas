@@ -126,6 +126,15 @@
                 </div>
             </div>
             <div class="col-12">
+                <label class="form-label">Instruksi Tambahan untuk AI <span class="text-danger">*</span></label>
+                <textarea name="ai_instruction" id="aiInstruction" class="form-control" rows="3"
+                    placeholder="Contoh: Buat soal berbasis studi kasus, prioritaskan analisis dan penerapan konsep, gunakan bahasa sederhana yang mudah dipahami mahasiswa..."></textarea>
+                <div class="d-flex justify-content-between align-items-center mt-1">
+                    <div class="invalid-feedback d-block text-danger small d-none" id="aiInstructionError"></div>
+                    <span class="form-text ms-auto" id="aiInstructionCounter">0/1000</span>
+                </div>
+            </div>
+            <div class="col-12">
                 <div class="form-text mb-1" id="allocPreview"></div>
                 <div class="form-text mb-2">
                     Bank soal: <strong><?= (int) $stats['total'] ?> / <?= (int) $maxQuestions ?></strong> &middot;
@@ -355,11 +364,54 @@ function copyCode(btn) {
         document.execCommand('copy'); ta.remove(); done();
     }
 }
+// ===================== Instruksi tambahan untuk AI (maks 1000 karakter) =====================
+const AI_INSTRUCTION_MAX = 1000;
+var aiField = document.getElementById('aiInstruction');
+var aiCounter = document.getElementById('aiInstructionCounter');
+var aiError = document.getElementById('aiInstructionError');
+
+function aiInstructionError(msg) {
+    aiError.textContent = msg || '';
+    aiError.classList.toggle('d-none', !msg);
+    aiField.classList.toggle('is-invalid', !!msg);
+}
+function aiInstructionTrimmed() { return aiField.value.trim(); }
+
+// Penghitung karakter real-time saat dosen mengetik.
+aiField.addEventListener('input', function () {
+    var len = aiField.value.length;
+    aiCounter.textContent = len + '/' + AI_INSTRUCTION_MAX;
+    aiCounter.classList.toggle('text-danger', len > AI_INSTRUCTION_MAX);
+    aiCounter.classList.toggle('fw-bold', len > AI_INSTRUCTION_MAX);
+    // Pesan error dibersihkan saat dosen memperbaiki input.
+    if (aiError && !aiError.classList.contains('d-none')) {
+        if (len > 0 && len <= AI_INSTRUCTION_MAX && aiInstructionTrimmed() !== '') aiInstructionError('');
+    }
+});
+
+// Validasi instruksi: wajib diisi (spasi saja = kosong) dan maks 1000 karakter.
+function validateAiInstruction() {
+    var trimmed = aiInstructionTrimmed();
+    if (trimmed === '') {
+        aiInstructionError('Instruksi tambahan untuk AI wajib diisi.');
+        aiField.focus();
+        return false;
+    }
+    if (trimmed.length > AI_INSTRUCTION_MAX) {
+        aiInstructionError('Instruksi tambahan untuk AI maksimal ' + AI_INSTRUCTION_MAX + ' karakter (saat ini ' + trimmed.length + ' karakter). Kurangi isinya.');
+        aiField.focus();
+        return false;
+    }
+    aiInstructionError('');
+    return true;
+}
+
 // Validasi frontend jumlah soal: HANYA 5/10/15/20 dan tidak melebihi sisa kapasitas
 // (backend mengulang validasi yang sama).
 const GEN_ALLOWED_COUNTS = <?= json_encode(array_map('intval', $counts)) ?>;
 const GEN_CAPACITY = <?= (int) $capacity ?>;
 function validateComposition(e) {
+    if (!validateAiInstruction()) return false;
     const f = e.target.closest('form');
     const n = parseInt(f.question_count.value, 10);
     if (GEN_ALLOWED_COUNTS.indexOf(n) === -1) {

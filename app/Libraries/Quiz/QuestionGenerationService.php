@@ -195,7 +195,7 @@ class QuestionGenerationService
      *   requested:int, duplicates:int, invalid:int, rounds:int, generate_calls:int,
      *   verify_calls:int, tokens:int, elapsed_ms:int}
      */
-    public function run(array $batch): array
+    public function run(array $batch, ?string $instruction = null): array
     {
         $start   = microtime(true);
         $batchId = (int) $batch['id'];
@@ -286,7 +286,7 @@ class QuestionGenerationService
 
             $res = $this->ai->chatJsonWithFallback(
                 $system,
-                QuestionSchema::userPrompt($chunk, $alloc, $need, $existing, $avoid),
+                QuestionSchema::userPrompt($chunk, $alloc, $need, $existing, $avoid, $instruction),
                 $logCtx + ['requested_count' => $need, 'received_count' => count($accepted), 'duplicate_count' => $stats['duplicates']],
                 $round,
                 ['timeout' => (int) min($this->generateTimeout(), self::TIME_BUDGET_SEC - $elapsed)]
