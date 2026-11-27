@@ -219,6 +219,7 @@ class QuestionGenerationService
         if (! $extraction['ok']) {
             $message = match ($extraction['error']) {
                 'no_text_layer' => 'PDF tidak memiliki lapisan teks (kemungkinan hasil scan) sehingga materinya tidak dapat dibaca. Tidak ada soal yang dibuat.',
+                'encrypted' => 'PDF terproteksi password sehingga isi materinya tidak dapat dibaca. Hapus proteksi PDF (mis. simpan ulang tanpa password) lalu unggah kembali. Tidak ada soal yang dibuat.',
                 default         => 'Teks PDF tidak dapat dibaca. Pastikan file PDF valid dan tidak rusak. Tidak ada soal yang dibuat.',
             };
 
