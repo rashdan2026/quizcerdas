@@ -102,7 +102,13 @@
             <?= csrf_field() ?>
             <div class="col-md-4">
                 <label class="form-label">File PDF (maks 10 MB)</label>
-                <input type="file" name="pdf_file" class="form-control" accept="application/pdf" required>
+                <div class="d-flex gap-2">
+                    <input type="file" name="pdf_file" id="pdfFile" class="form-control" accept="application/pdf" required>
+                    <button type="button" class="btn btn-outline-primary text-nowrap flex-shrink-0" id="analyzeBtn" title="Periksa kualitas hasil pembacaan PDF sebelum generate">
+                        <i class="bi bi-eye me-1"></i>Periksa
+                    </button>
+                </div>
+                <input type="hidden" name="analysis_token" id="analysisToken" value="">
             </div>
             <div class="col-md-2">
                 <label class="form-label">Judul sumber (opsional)</label>
@@ -148,9 +154,24 @@
                         <i class="bi bi-exclamation-triangle me-1"></i>Kapasitas soal tinggal <?= (int) $capacity ?> (kurang dari 5). Hapus beberapa soal terlebih dahulu sebelum generate lagi.
                     </div>
                 <?php endif; ?>
-                <button class="btn btn-primary" id="genBtn"<?= $formLocked ? ' disabled' : '' ?> onclick="return validateComposition(event)"><i class="bi bi-stars me-1"></i>Generate</button>
+                <div class="d-flex flex-wrap gap-2">
+                    <button class="btn btn-primary" id="genBtn"<?= $formLocked ? ' disabled' : '' ?> onclick="return validateComposition(event)"><i class="bi bi-stars me-1"></i>Generate</button>
+                </div>
+                <div class="form-text mt-1">Saran: klik <em>Periksa</em> dulu untuk melihat hasil pembacaan PDF (ringkasan per halaman + preview teks) sebelum Generate.</div>
             </div>
         </form>
+
+        <!-- Panel hasil pemeriksaan pembacaan PDF (Adaptive PDF Reader) -->
+        <div id="analyzeBox" class="card mt-3 d-none">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <div class="spinner-border spinner-border-sm text-primary d-none" id="analyzeSpinner"></div>
+                    <i class="bi flex-shrink-0" id="analyzeIcon"></i>
+                    <strong id="analyzeTitle">Memeriksa pembacaan PDF…</strong>
+                </div>
+                <div id="analyzeBody"></div>
+            </div>
+        </div>
 
         <div id="genBox" class="alert alert-info mt-3 mb-0 d-none" role="status" aria-live="polite">
             <div class="d-flex align-items-start gap-2">
@@ -565,6 +586,133 @@ document.getElementById('qcount').addEventListener('change', function () {
     document.getElementById('allocPreview').textContent = '';
 });
 
+// ===================== Periksa Pembacaan PDF (Adaptive PDF Reader) =====================
+// Dosen memeriksa kualitas hasil pembacaan PDF SEBELUM Generate Soal:
+// ringkasan per halaman, peringatan, dan preview teks. PDF & hasil analisis
+// disimpan sementara di server (token, bukan URL publik) dan dipakai ulang
+// saat Generate — file tidak diunggah/dianalisis dua kali.
+(function () {
+    var btn = document.getElementById('analyzeBtn');
+    var form = document.getElementById('genForm');
+    var file = document.getElementById('pdfFile');
+    var tokenInput = document.getElementById('analysisToken');
+    var box = document.getElementById('analyzeBox');
+    var spinner = document.getElementById('analyzeSpinner');
+    var icon = document.getElementById('analyzeIcon');
+    var titleEl = document.getElementById('analyzeTitle');
+    var body = document.getElementById('analyzeBody');
+    var analyzeUrl = <?= json_encode(base_url('/lecturer/quiz/' . (int) $quiz['id'] . '/analyze-pdf')) ?>;
+    if (!btn || !form || !file) return;
+
+    function analyzeHeaders() { return {'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json'}; }
+
+    // Pengguna mengganti file: hasil analisis lama tidak berlaku lagi.
+    file.addEventListener('change', function () {
+        tokenInput.value = '';
+        box.classList.add('d-none');
+    });
+
+    function statusBadge(s) {
+        var map = {ok: ['success', 'terbaca'], warning: ['warning text-dark', 'peringatan'], empty: ['secondary', 'tanpa teks'], needs_ocr: ['warning text-dark', 'perlu OCR'], failed: ['danger', 'gagal']};
+        var m = map[s] || ['secondary', s];
+        return '<span class="badge bg-' + m[0] + '">' + m[1] + '</span>';
+    }
+
+    function render(d) {
+        var h = '';
+        if (!d.readable) {
+            box.className = 'card mt-3 border-danger';
+            icon.className = 'bi bi-x-octagon-fill text-danger';
+            titleEl.textContent = 'PDF tidak dapat dibaca untuk pembuatan soal';
+        } else {
+            box.className = 'card mt-3 ' + (d.warnings && d.warnings.length ? 'border-warning' : 'border-success');
+            icon.className = 'bi ' + (d.warnings && d.warnings.length ? 'bi-exclamation-triangle-fill text-warning' : 'bi-check-circle-fill text-success');
+            titleEl.textContent = d.warnings && d.warnings.length ? 'PDF terbaca dengan peringatan' : 'PDF terbaca dengan baik';
+        }
+
+        var s = d.summary || {};
+        h += '<div class="small text-muted mb-2">Dokumen: <strong>' + (d.document ? documentEscape(d.document.filename) : '-') + '</strong> · ' +
+            (d.document ? d.document.size_human : '-') + ' · ' + (s.pages_total || 0) + ' halaman · metode: ' +
+            documentEscape((s.methods || []).join(', ') || '-') + '</div>';
+
+        h += '<div class="d-flex flex-wrap gap-2 mb-2 small">' +
+            '<span class="badge bg-success">' + (s.pages_ok || 0) + ' terbaca baik</span>' +
+            '<span class="badge bg-warning text-dark">' + (s.pages_warning || 0) + ' peringatan</span>' +
+            '<span class="badge bg-secondary">' + (s.pages_empty || 0) + ' tanpa teks</span>' +
+            '<span class="badge bg-info text-dark">' + (s.pages_ocr || 0) + ' via OCR</span>' +
+            '<span class="badge bg-danger">' + (s.pages_failed || 0) + ' gagal</span>' +
+            '<span class="badge bg-dark">' + (s.chars || 0) + ' karakter · ' + (s.words || 0) + ' kata</span>' +
+            (s.ocr_available ? '<span class="badge bg-light text-dark border">OCR tersedia</span>' : '<span class="badge bg-light text-dark border">OCR tidak tersedia</span>') +
+            '</div>';
+
+        if (d.warnings && d.warnings.length) {
+            h += '<div class="alert alert-warning small py-2">';
+            d.warnings.forEach(function (w) { h += '<div><i class="bi bi-exclamation-triangle me-1"></i>' + documentEscape(w) + '</div>'; });
+            h += '</div>';
+        }
+
+        if (d.preview) {
+            h += '<label class="form-label small mb-1">Preview teks hasil ekstraksi (_awal dokumen_):</label>' +
+                '<pre class="border rounded p-2 bg-light small" style="max-height:220px;overflow:auto;white-space:pre-wrap;">' + documentEscape(d.preview) + '</pre>';
+        }
+
+        if (!d.readable) {
+            h += '<div class="alert alert-danger small mb-0"><i class="bi bi-x-octagon me-1"></i>Tidak dapat melanjutkan Generate dengan file ini. ' +
+                (d.error === 'encrypted' ? 'PDF terproteksi password — hapus proteksi lalu unggah ulang.' : 'Gunakan PDF lain, atau PDF hasil scan memerlukan OCR yang belum tersedia di server.') + '</div>';
+        } else if (tokenInput) {
+            tokenInput.value = d.token || '';
+            h += '<div class="small text-success"><i class="bi bi-check2 me-1"></i>Siap generate — file &amp; hasil analisis ini akan dipakai langsung (tanpa unggah ulang).</div>';
+        }
+
+        body.innerHTML = h;
+    }
+
+    function documentEscape(s) {
+        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    btn.addEventListener('click', function () {
+        if (!file.files || !file.files.length) {
+            alert('Pilih file PDF terlebih dahulu, lalu klik Periksa.');
+            return;
+        }
+        var fd = new FormData();
+        fd.append(file.name, file.files[0]);
+        var csrf = form.querySelector('input[name="csrf_test_name"]');
+        if (csrf) fd.append(csrf.name, csrf.value);
+
+        btn.disabled = true;
+        box.classList.remove('d-none');
+        box.className = 'card mt-3';
+        spinner.classList.remove('d-none');
+        icon.className = 'bi';
+        titleEl.textContent = 'Memeriksa pembacaan PDF… (analisis per halaman, maksimal ±1 menit)';
+        body.innerHTML = '';
+
+        fetch(analyzeUrl, {method: 'POST', headers: analyzeHeaders(), body: fd})
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (!d || d.ok === false) {
+                    box.className = 'card mt-3 border-danger';
+                    spinner.classList.add('d-none');
+                    icon.className = 'bi bi-x-octagon-fill text-danger';
+                    titleEl.textContent = 'Pemeriksaan gagal';
+                    body.innerHTML = '<div class="alert alert-danger small mb-0">' + documentEscape(d && d.message ? d.message : 'PDF tidak dapat diperiksa. Pastikan file PDF valid.') + '</div>';
+                    return;
+                }
+                render(d);
+            })
+            .catch(function () {
+                box.className = 'card mt-3 border-danger';
+                spinner.classList.add('d-none');
+                icon.className = 'bi bi-wifi-off text-danger';
+                titleEl.textContent = 'Koneksi terputus';
+                body.innerHTML = '<div class="alert alert-danger small mb-0">Pemeriksaan tidak selesai. Coba lagi.</div>';
+            })
+            .finally(function () { btn.disabled = false; spinner.classList.add('d-none'); });
+    });
+})();
+
 // ===================== Generate AI (satu request + polling status) =====================
 // SATU request POST /generate memvalidasi unggahan lalu memproses generate
 // sampai selesai — tidak ada antrean; gagal berarti gagal (batch ditandai
@@ -672,8 +820,11 @@ document.getElementById('qcount').addEventListener('change', function () {
     form.addEventListener('submit', function (e) {
         e.preventDefault();
         if (busy || !validateComposition(e)) return;
-        if (!form.pdf_file.files || !form.pdf_file.files.length) {
-            setBox('danger', 'File PDF belum dipilih', 'Pilih file PDF materi terlebih dahulu.');
+        var reuse = document.getElementById('analysisToken');
+        var reuseToken = reuse ? reuse.value : '';
+        var hasFile = form.pdf_file.files && form.pdf_file.files.length;
+        if (!reuseToken && !hasFile) {
+            setBox('danger', 'File PDF belum dipilih', 'Pilih file PDF materi terlebih dahulu (saran: klik Periksa dulu untuk menilai hasil pembacaan).');
             return;
         }
         setBusy(true);
@@ -681,9 +832,13 @@ document.getElementById('qcount').addEventListener('change', function () {
         currentBatch = null;
         lastStatus = null;
         startClock();
-        setBox('info', 'Mengunggah PDF & memeriksa keamanan…', '');
+        setBox('info', reuseToken ? 'Menjalankan generate dengan hasil pemeriksaan PDF…' : 'Mengunggah PDF & memeriksa keamanan…', '');
         schedulePoll(1500);
-        fetch(form.action, {method: 'POST', headers: headers(), body: new FormData(form)})
+        // Bila memakai hasil pemeriksaan (analysis_token), file tidak dikirim
+        // ulang — server memakai PDF yang sudah dianalisis.
+        var body = new FormData(form);
+        if (reuseToken && hasFile) { body.delete('pdf_file'); }
+        fetch(form.action, {method: 'POST', headers: headers(), body: body})
             .then(function (r) { return r.json().then(function (d) { return {ok: r.ok, data: d}; }); })
             .then(function (res) {
                 var d = res.data || {};

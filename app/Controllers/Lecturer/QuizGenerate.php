@@ -21,6 +21,9 @@ class QuizGenerate extends BaseController
 
     private const SERVER_ERROR_MESSAGE = 'Proses generate gagal di server. Tidak ada soal yang disimpan. Silakan coba lagi; bila berulang, hubungi administrator.';
 
+    /** Usia maksimum hasil analisis preview (detik) sebelum harus dianalisis ulang. */
+    private const ANALYSIS_TTL_SEC = 86400;
+
     private QuizModel $quizModel;
     private QuizBatchModel $batchModel;
 
@@ -160,36 +163,63 @@ class QuizGenerate extends BaseController
             return ['ok' => false, 'error' => 'instruction_too_long', 'message' => 'Instruksi tambahan untuk AI maksimal ' . self::MAX_INSTRUCTION_CHARS . ' karakter.'];
         }
 
-        $file = $this->request->getFile('pdf_file');
-        if ($file === null || ! $file->isValid()) {
-            return ['ok' => false, 'error' => 'invalid_file', 'message' => 'File PDF tidak valid.'];
-        }
+        // Hasil analisis preview (analysis_token) — bila valid, file PDF yang
+        // sudah diunggah & dianalisis dipakai ulang (tanpa unggah ulang).
+        $analysis    = $this->reuseAnalysis();
+        $tokenGiven  = trim((string) $this->request->getPost('analysis_token')) !== '';
 
-        if ($file->getSize() > self::MAX_BYTES) {
-            return ['ok' => false, 'error' => 'too_large', 'message' => 'Ukuran PDF maksimum 10 MB.'];
-        }
-        if ($file->getSize() === 0) {
-            return ['ok' => false, 'error' => 'empty_file', 'message' => 'File kosong.'];
-        }
+        $file    = null;
+        $pdfPath = null;
+        $sha256  = null;
+        $clientName = null;
 
-        // Validasi PDF: andalkan magic bytes %PDF- (spec mengizinkan header di
-        // 1024 byte pertama). finfo hanya pelengkap — di sebagian shared hosting
-        // magic database finfo tidak lengkap sehingga PDF valid terdeteksi
-        // salah (application/octet-stream) dan menolak file yang sebenarnya sah.
-        $tmpPath  = $file->getTempName();
-        $head     = (string) file_get_contents($tmpPath, false, null, 0, 1024);
-        $isPdf    = str_contains($head, '%PDF-');
-        $mime     = null;
-        if (! $isPdf) {
-            try {
-                $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($tmpPath);
-            } catch (\Throwable $e) {
-                $mime = null;
+        if ($analysis !== null) {
+            if (empty($analysis['summary']['can_generate'])) {
+                @unlink((string) $analysis['pdf_path']);
+                @unlink($this->tempDir() . '/analyze_' . (string) $this->request->getPost('analysis_token') . '.json');
+
+                return ['ok' => false, 'error' => 'unreadable_pdf', 'message' => 'Hasil pembacaan PDF tidak memadai untuk pembuatan soal (materi tidak cukup terbaca). Tidak ada soal yang dibuat.'];
             }
-            $isPdf = ($mime === 'application/pdf');
-        }
-        if (! $isPdf) {
-            return ['ok' => false, 'error' => 'not_pdf', 'message' => 'File harus berupa PDF valid.'];
+
+            $pdfPath    = (string) $analysis['pdf_path'];
+            $sha256     = (string) ($analysis['sha256'] ?? '') ?: (string) hash_file('sha256', $pdfPath);
+            $clientName = mb_substr((string) ($analysis['original_filename'] ?? 'dokumen.pdf'), 0, 255);
+        } else {
+            if ($tokenGiven) {
+                return ['ok' => false, 'error' => 'analysis_expired', 'message' => 'Hasil pemeriksaan PDF sudah kadaluarsa atau tidak ditemukan. Silakan periksa PDF lagi atau unggah ulang.'];
+            }
+
+            $file = $this->request->getFile('pdf_file');
+            if ($file === null || ! $file->isValid()) {
+                return ['ok' => false, 'error' => 'invalid_file', 'message' => 'File PDF tidak valid.'];
+            }
+
+            if ($file->getSize() > self::MAX_BYTES) {
+                return ['ok' => false, 'error' => 'too_large', 'message' => 'Ukuran PDF maksimum 10 MB.'];
+            }
+            if ($file->getSize() === 0) {
+                return ['ok' => false, 'error' => 'empty_file', 'message' => 'File kosong.'];
+            }
+
+            // Validasi PDF: andalkan magic bytes %PDF- (spec mengizinkan header di
+            // 1024 byte pertama). finfo hanya pelengkap — di sebagian shared hosting
+            // magic database finfo tidak lengkap sehingga PDF valid terdeteksi
+            // salah (application/octet-stream) dan menolak file yang sebenarnya sah.
+            $tmpPath  = $file->getTempName();
+            $head     = (string) file_get_contents($tmpPath, false, null, 0, 1024);
+            $isPdf    = str_contains($head, '%PDF-');
+            $mime     = null;
+            if (! $isPdf) {
+                try {
+                    $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($tmpPath);
+                } catch (\Throwable $e) {
+                    $mime = null;
+                }
+                $isPdf = ($mime === 'application/pdf');
+            }
+            if (! $isPdf) {
+                return ['ok' => false, 'error' => 'not_pdf', 'message' => 'File harus berupa PDF valid.'];
+            }
         }
 
         $easy   = (int) $this->request->getPost('difficulty_easy_pct');
@@ -212,9 +242,12 @@ class QuizGenerate extends BaseController
             @file_put_contents($dir . '/.htaccess', "Require all denied\n");
         }
 
-        $sha256  = hash_file('sha256', $file->getTempName());
-        $pdfPath = $dir . '/pdf_' . bin2hex(random_bytes(8)) . '.pdf';
-        $file->move($dir, basename($pdfPath));
+        if ($pdfPath === null) {
+            $sha256  = hash_file('sha256', $file->getTempName());
+            $pdfPath = $dir . '/pdf_' . bin2hex(random_bytes(8)) . '.pdf';
+            $file->move($dir, basename($pdfPath));
+            $clientName = mb_substr($file->getClientName(), 0, 255);
+        }
 
         $now      = date('Y-m-d H:i:s');
         $db       = db_connect();
@@ -237,7 +270,7 @@ class QuizGenerate extends BaseController
                 'quiz_id'              => $quizId,
                 'lecturer_id'          => $this->lid(),
                 'source_type'          => 'ai_pdf',
-                'original_filename'    => mb_substr($file->getClientName(), 0, 255),
+                'original_filename'    => $clientName,
                 'file_size_bytes'      => (int) filesize($pdfPath),
                 'file_sha256'          => $sha256,
                 'source_title'         => trim((string) $this->request->getPost('source_title')) ?: null,
@@ -258,13 +291,25 @@ class QuizGenerate extends BaseController
             $db->transCommit();
         } else {
             $db->transRollback();
-            @unlink($pdfPath);
+            if ($analysis === null) {
+                @unlink($pdfPath); // PDF hasil unggah langsung: tidak ada referensi lain, hapus.
+            }
 
             return ['ok' => false, 'error' => 'rejected', 'message' => $rejected ?? 'Gagal menyimpan batch. Silakan coba lagi.'];
         }
 
         // ===== Pemeriksaan malware WAJIB sebelum ekstraksi/AI =====
-        $scan = (new MalwareScanner())->scan($pdfPath);
+        // Hasil analisis preview sudah memuat hasil scan yang masih segar (<24 jam):
+        // reuse agar tidak memindai dua kali; jalur unggah langsung memindai normal.
+        if ($analysis !== null) {
+            $scan = [
+                'status' => (string) ($analysis['scan']['status'] ?? 'unknown'),
+                'result' => (string) ($analysis['scan']['result'] ?? ''),
+                'engine' => (string) ($analysis['scan']['engine'] ?? 'reused'),
+            ];
+        } else {
+            $scan = (new MalwareScanner())->scan($pdfPath);
+        }
 
         $this->batchModel->update($batchId, [
             'scan_status' => $scan['status'],
@@ -294,6 +339,28 @@ class QuizGenerate extends BaseController
         }
 
         // Langsung diproses di request yang sama — tidak ada antrean.
+        //
+        // Bila hasil analisis preview tersedia: seed hasil ekstraksi (teks
+        // ternormalisasi) langsung ke batch agar PDF TIDAK diekstraksi ulang,
+        // lalu hapus file analisis sementara (token sudah dikonsumsi).
+        if ($analysis !== null) {
+            $extractPath = $dir . '/extract_' . $batchId . '.txt';
+            @file_put_contents($extractPath, (string) ($analysis['text'] ?? ''));
+            if (is_file($extractPath) && trim((string) file_get_contents($extractPath)) !== '') {
+                @file_put_contents(
+                    $dir . '/extract_' . $batchId . '.json',
+                    json_encode([
+                        'analyzed_at' => $analysis['created_at'] ?? date('c'),
+                        'summary'     => $analysis['summary'] ?? null,
+                        'warnings'    => $analysis['warnings'] ?? [],
+                        'reused_from' => 'preview',
+                    ], JSON_UNESCAPED_UNICODE)
+                );
+                $this->batchModel->update($batchId, ['extract_path' => $extractPath, 'updated_at' => date('Y-m-d H:i:s')]);
+            }
+            @unlink($this->tempDir() . '/analyze_' . (string) $this->request->getPost('analysis_token') . '.json');
+        }
+
         $this->batchModel->update($batchId, [
             'status'         => 'processing',
             'status_message' => 'Menyiapkan materi dari PDF…',
@@ -301,6 +368,151 @@ class QuizGenerate extends BaseController
         ]);
 
         return ['ok' => true, 'batch_id' => $batchId, 'instruction' => $instruction];
+    }
+
+    /**
+     * Analisis pembacaan PDF (Adaptive PDF Reader) SEBELUM generate dijalankan.
+     * Dosen mendapat ringkasan kualitas per halaman, peringatan, dan preview teks
+     * — jujur, bukan "berhasil" hanya karena upload berhasil.
+     *
+     * PDF & hasil analisis disimpan sementara di quiz_tmp (token acak, bukan
+     * URL publik); dipakai ulang oleh generate via analysis_token agar file
+     * tidak perlu diunggah & dianalisis dua kali. Kadaluarsa 24 jam.
+     */
+    public function analyzePdf(int $quizId)
+    {
+        $this->ownedQuizOrFail($quizId);
+
+        $file = $this->request->getFile('pdf_file');
+        if ($file === null || ! $file->isValid()) {
+            return $this->json(['ok' => false, 'error' => 'invalid_file', 'message' => 'File PDF tidak valid.'], 422);
+        }
+        if ($file->getSize() > self::MAX_BYTES) {
+            return $this->json(['ok' => false, 'error' => 'too_large', 'message' => 'Ukuran PDF maksimum 10 MB.'], 422);
+        }
+        if ($file->getSize() === 0) {
+            return $this->json(['ok' => false, 'error' => 'empty_file', 'message' => 'File kosong.'], 422);
+        }
+
+        $tmpPath = $file->getTempName();
+        $head    = (string) file_get_contents($tmpPath, false, null, 0, 1024);
+        $isPdf   = str_contains($head, '%PDF-');
+        if (! $isPdf) {
+            try {
+                $isPdf = ((new \finfo(FILEINFO_MIME_TYPE))->file($tmpPath)) === 'application/pdf';
+            } catch (\Throwable $e) {
+                $isPdf = false;
+            }
+        }
+        if (! $isPdf) {
+            return $this->json(['ok' => false, 'error' => 'not_pdf', 'message' => 'File harus berupa PDF valid.'], 422);
+        }
+
+        $dir = $this->tempDir();
+
+        // Simpan sementara + pindai malware (sama ketat dengan jalur generate).
+        $token  = bin2hex(random_bytes(16));
+        $pdfPath = $dir . '/analyze_' . $token . '.pdf';
+        $file->move($dir, basename($pdfPath));
+
+        $scan = (new MalwareScanner())->scan($pdfPath);
+        if ($scan['status'] !== 'clean') {
+            @unlink($pdfPath);
+
+            return $this->json([
+                'ok'      => false,
+                'error'   => 'scan_' . $scan['status'],
+                'message' => $scan['status'] === 'infected'
+                    ? 'File ditolak karena gagal pemeriksaan keamanan.'
+                    : 'File ditolak karena keamanannya tidak dapat dipastikan (pemindai tidak tersedia/gagal).',
+            ], 422);
+        }
+
+        // Analisis pembacaan — kegagalan ekstraksi diketahui SEBELUM AI dipanggil.
+        $reader = new \App\Libraries\Quiz\AdaptivePdfReader();
+        $result = $reader->analyze($pdfPath);
+
+        $payload = [
+            'ok'       => true,
+            'token'    => $token,
+            'readable' => $result['ok'],
+            'error'    => $result['error'],
+            'document' => [
+                'filename'   => mb_substr((string) $file->getClientName(), 0, 255),
+                'size_bytes' => (int) @filesize($pdfPath),
+                'size_human' => number_format((int) @filesize($pdfPath) / 1048576, 2) . ' MB',
+            ],
+            'summary'  => $result['summary'],
+            'warnings' => $result['warnings'],
+            'preview'  => $result['preview'],
+            'pages'    => array_map(static fn ($p) => [
+                'page' => $p['page'], 'status' => $p['status'], 'chars' => $p['chars'], 'method' => $p['method'],
+            ], $result['pages']),
+        ];
+
+        if ($result['ok']) {
+            // Simpan hasil analisis + PDF untuk dipakai ulang saat generate.
+            $stored = [
+                'lecturer_id'       => $this->lid(),
+                'created_at'        => date('c'),
+                'expires_at'        => date('c', time() + self::ANALYSIS_TTL_SEC),
+                'original_filename' => mb_substr((string) $file->getClientName(), 0, 255),
+                'pdf_path'          => $pdfPath,
+                'sha256'            => hash_file('sha256', $pdfPath),
+                'scan'              => ['status' => $scan['status'], 'result' => $scan['result'], 'engine' => $scan['engine'], 'at' => date('c')],
+                'text'              => $result['text'],
+                'summary'           => $result['summary'],
+                'warnings'          => $result['warnings'],
+            ];
+            @file_put_contents($dir . '/analyze_' . $token . '.json', json_encode($stored, JSON_UNESCAPED_UNICODE));
+        } else {
+            @unlink($pdfPath);
+        }
+
+        return $this->json($payload);
+    }
+
+    /**
+     * Ambil hasil analisis preview yang dipakai ulang (analysis_token).
+     * Validasi ketat: format token, kepemilikan dosen, TTL, dan file masih ada.
+     */
+    private function reuseAnalysis(): ?array
+    {
+        $token = (string) $this->request->getPost('analysis_token');
+        if (! preg_match('/^[a-f0-9]{32}$/', $token)) {
+            return null;
+        }
+
+        $path = $this->tempDir() . '/analyze_' . $token . '.json';
+        if (! is_file($path)) {
+            return null;
+        }
+
+        $data = json_decode((string) file_get_contents($path), true);
+        if (! is_array($data)
+            || (int) ($data['lecturer_id'] ?? 0) !== $this->lid()
+            || (strtotime((string) ($data['expires_at'] ?? '')) ?: 0) < time()
+            || empty($data['pdf_path'])
+            || ! is_file((string) $data['pdf_path'])
+            || ! str_starts_with(basename((string) $data['pdf_path']), 'analyze_' . $token . '.pdf')
+        ) {
+            @unlink($path);
+
+            return null;
+        }
+
+        return $data;
+    }
+
+    private function tempDir(): string
+    {
+        $dir = WRITEPATH . 'quiz_tmp';
+        if (! is_dir($dir)) {
+            @mkdir($dir, 0770, true);
+            @file_put_contents($dir . '/.htaccess', "Require all denied\n");
+        }
+
+        return $dir;
     }
 
     /**

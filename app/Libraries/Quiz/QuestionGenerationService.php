@@ -114,7 +114,7 @@ class QuestionGenerationService
 
     // ================= Ekstraksi (satu kali per batch) =================
 
-    /** @return array{ok:bool, text?:string, error?:string} */
+    /** @return array{ok:bool, text?:string, error?:string, message?:string} */
     public function ensureExtraction(array $batch): array
     {
         if (! empty($batch['extract_path']) && is_file($batch['extract_path'])) {
@@ -125,6 +125,7 @@ class QuestionGenerationService
 
         $dir  = $this->tempDir();
         $path = $dir . '/extract_' . (int) $batch['id'] . '.txt';
+        $jsonPath = $dir . '/extract_' . (int) $batch['id'] . '.json';
 
         // Dokumen yang identik (sha256 sama) pernah diekstrak: pakai ulang
         // hasilnya (ekstraksi deterministik) alih-alih mengekstrak ulang.
@@ -139,16 +140,27 @@ class QuestionGenerationService
             }
         }
 
-        $res = (new PdfTextExtractor())->extract((string) $batch['pdf_path']);
+        // Adaptive PDF Reader: parser utama -> parser alternatif -> OCR (bila
+        // tersedia), dengan pemeriksaan kualitas per halaman & normalisasi.
+        $res = (new AdaptivePdfReader())->analyze((string) $batch['pdf_path']);
 
         if (! $res['ok']) {
             return ['ok' => false, 'error' => $res['error'] ?? 'extract_failed'];
         }
 
         file_put_contents($path, $res['text']);
+        // Ringkasan kualitas pembacaan (untuk riwayat & laporan dosen); isi teks
+        // TIDAK disimpan di sini (sudah ada di file teks) — hanya statistik.
+        @file_put_contents($jsonPath, json_encode([
+            'analyzed_at' => date('c'),
+            'summary'     => $res['summary'],
+            'warnings'    => $res['warnings'],
+            'pages'       => $res['pages'],
+        ], JSON_UNESCAPED_UNICODE));
+
         $this->batches->update((int) $batch['id'], ['extract_path' => $path, 'updated_at' => date('Y-m-d H:i:s')]);
 
-        return ['ok' => true, 'text' => $res['text']];
+        return ['ok' => true, 'text' => $res['text'], 'summary' => $res['summary'], 'warnings' => $res['warnings']];
     }
 
     private function tempDir(): string
@@ -218,7 +230,7 @@ class QuestionGenerationService
         $extraction = $this->ensureExtraction($batch);
         if (! $extraction['ok']) {
             $message = match ($extraction['error']) {
-                'no_text_layer' => 'PDF tidak memiliki lapisan teks (kemungkinan hasil scan) sehingga materinya tidak dapat dibaca. Tidak ada soal yang dibuat.',
+                'no_text_layer' => 'PDF tidak memiliki teks yang dapat dibaca (kemungkinan hasil scan/gambar) dan OCR tidak tersedia atau tidak berhasil di server ini. Tidak ada soal yang dibuat.',
                 'encrypted' => 'PDF terproteksi password sehingga isi materinya tidak dapat dibaca. Hapus proteksi PDF (mis. simpan ulang tanpa password) lalu unggah kembali. Tidak ada soal yang dibuat.',
                 default         => 'Teks PDF tidak dapat dibaca. Pastikan file PDF valid dan tidak rusak. Tidak ada soal yang dibuat.',
             };

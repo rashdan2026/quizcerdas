@@ -116,6 +116,7 @@ $routes->group('lecturer', ['filter' => 'authguard:lecturer'], static function (
     $routes->post('quiz/questions/(:num)/update', 'Lecturer\QuizQuestion::update/$1');
     $routes->post('quiz/questions/(:num)/delete', 'Lecturer\QuizQuestion::delete/$1');
     $routes->post('quiz/(:num)/generate', 'Lecturer\QuizGenerate::generate/$1');
+    $routes->post('quiz/(:num)/analyze-pdf', 'Lecturer\QuizGenerate::analyzePdf/$1');
     $routes->get('quiz/(:num)/generate-status', 'Lecturer\QuizGenerate::generateStatus/$1');
     $routes->get('quiz/batches/(:num)/status', 'Lecturer\QuizGenerate::batchStatus/$1');
     $routes->get('quiz/(:num)/review', 'Lecturer\Quiz::show/$1');

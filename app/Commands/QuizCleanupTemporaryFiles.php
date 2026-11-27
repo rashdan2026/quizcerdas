@@ -61,8 +61,26 @@ class QuizCleanupTemporaryFiles extends BaseCommand
             }
         }
 
+        // ===== Preview analisis PDF (analyze_*) =====
+        // Hasil "Periksa PDF" sebelum generate: retensi lebih pendek (24 jam)
+        // karena dijalankan ulang setiap kali dosen memeriksa PDF baru.
+        $previewRemoved = 0;
+        $analyzeDir     = WRITEPATH . 'quiz_tmp';
+        $cutoff         = time() - 86400;
+        foreach (glob($analyzeDir . '/analyze_*') ?: [] as $file) {
+            if (is_file($file) && (int) @filemtime($file) < $cutoff) {
+                if (@unlink($file)) {
+                    $previewRemoved++;
+                } else {
+                    $errors++;
+                    log_message('error', 'QuizCleanup: gagal menghapus ' . basename($file) . '; akan dicoba ulang siklus berikutnya.');
+                }
+            }
+        }
+
         CLI::write("Batch diproses: " . count($rows), 'green');
         CLI::write("File dihapus: {$removed}", 'green');
+        CLI::write("Preview analisis dihapus: {$previewRemoved}", 'green');
         if ($errors > 0) {
             CLI::write("Gagal: {$errors} (dicatat di log, dicoba ulang nanti)", 'red');
         }

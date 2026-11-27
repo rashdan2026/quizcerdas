@@ -54,6 +54,33 @@ final class HtmlSanitizer
     // Kurung diperbolehkan untuk nilai warna rgb()/rgba(); url() tetap diblokir blacklist.
     private const CSS_VALUE_RE = '/^[#0-9a-zA-Z ,.%()\-]+$/';
 
+    /** Bahasa code block yang diizinkan (metadata divalidasi; di luar daftar → plaintext). */
+    private const ALLOWED_LANGS = [
+        'sql', 'php', 'javascript', 'python', 'java', 'c', 'cpp', 'html', 'css',
+        'json', 'bash', 'xml', 'plaintext',
+    ];
+
+    /** Alias bahasa (hasil paste/AI/editor) dinormalisasi sebelum validasi. */
+    private const LANG_ALIASES = [
+        'plain' => 'plaintext', 'text' => 'plaintext', 'plaintext' => 'plaintext',
+        'js' => 'javascript', 'py' => 'python', 'c++' => 'cpp',
+        'sh' => 'bash', 'shell' => 'bash', 'zsh' => 'bash',
+    ];
+
+    /** Normalisasi + validasi bahasa code block; nilai tidak dikenal → plaintext. */
+    private static function normalizeLanguage(string $raw): string
+    {
+        $lang = strtolower(trim($raw));
+        if (isset(self::LANG_ALIASES[$lang])) {
+            $lang = self::LANG_ALIASES[$lang];
+        }
+        if (preg_match('/^[a-z0-9#+.\-]+$/', $lang) !== 1 || ! in_array($lang, self::ALLOWED_LANGS, true)) {
+            return 'plaintext';
+        }
+
+        return $lang;
+    }
+
     // ==================== API publik ====================
 
     /**
@@ -257,10 +284,10 @@ final class HtmlSanitizer
         // Bahasa dari atribut tag pembuka pre/code.
         $language = 'plaintext';
         if (preg_match('/language-([a-z0-9#+.\-]+)/i', $rawPre, $m)) {
-            $language = strtolower($m[1]);
+            $language = self::normalizeLanguage($m[1]);
         } elseif (preg_match('/data-language="([a-z0-9#+.\-]+)"/i', $rawPre, $m)) {
             // Konvensi Quill.js: <pre data-language="...">
-            $language = strtolower($m[1]) === 'plain' ? 'plaintext' : strtolower($m[1]);
+            $language = self::normalizeLanguage($m[1]);
         }
 
         // Buang tag pembuka/penutup pre & code.
@@ -293,13 +320,17 @@ final class HtmlSanitizer
             . '</code></pre>';
     }
 
-    /** Ambil bahasa syntax dari class/data-language pada pre atau code di dalamnya. */
+    /** Ambil bahasa syntax dari data-language/class pada pre atau code di dalamnya. */
     private static function codeLanguage(\DOMElement $pre): string
     {
         foreach ([$pre] + iterator_to_array($pre->getElementsByTagName('code')) as $el) {
-            $src = trim((string) ($el->getAttribute('data-language') ?: $el->getAttribute('class')));
-            if ($src !== '' && preg_match('/language-([a-z0-9#+.\-]+)/i', $src, $m)) {
-                return strtolower($m[1]);
+            $dl = trim((string) $el->getAttribute('data-language'));
+            if ($dl !== '') {
+                return self::normalizeLanguage($dl);
+            }
+            $class = trim((string) $el->getAttribute('class'));
+            if ($class !== '' && preg_match('/language-([a-z0-9#+.\-]+)/i', $class, $m)) {
+                return self::normalizeLanguage($m[1]);
             }
         }
 
