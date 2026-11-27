@@ -18,10 +18,11 @@ use Resend\ValueObjects\Transporter\Headers;
  *  - webriau  : Webriau.com API (endpoint yang sama, dipertahankan apa adanya)
  *
  * Mode:
- *  - MAIL_GATEWAY_ENABLED=true  → provider dipilih MAIL_PROVIDER (satu provider,
- *    tanpa fallback otomatis).
+ *  - MAIL_GATEWAY_ENABLED=true  → provider dipilih MAIL_PROVIDER. Khusus
+ *    `resend`, jika Resend mengembalikan error (termasuk 429/kuota), email
+ *    otomatis dialihkan ke Gmail/Webriau API.
  *  - MAIL_GATEWAY_ENABLED=false → perilaku lama dipertahankan: Webriau/Gmail API
- *    dulu, lalu fallback. Fallback TurboSMTP digantikan Resend.
+ *    dulu, lalu fallback Resend.
  *
  * Tidak pernah mencatat API key, isi email (OTP/password), atau detail internal
  * ke log/pesan pengguna.
@@ -73,7 +74,31 @@ class MailService
                 return $this->result(false, 'Konfigurasi MAIL_PROVIDER tidak dikenal.', null);
             }
 
-            return $this->sendVia($provider, $to, $subject, $html, $text);
+            $result = $this->sendVia($provider, $to, $subject, $html, $text);
+            if ($result['ok']) {
+                return $result;
+            }
+
+            // Resend diprioritaskan; jika error (termasuk 429/kuota), alihkan
+            // ke Gmail/Webriau API agar email tetap terkirim.
+            if ($provider === self::PROVIDER_RESEND) {
+                log_message('error', 'MailGateway: Resend gagal -> fallback Gmail/Webriau.');
+
+                $fallback = $this->sendVia(self::PROVIDER_WEBRIAU, $to, $subject, $html, $text);
+                if ($fallback['ok']) {
+                    $fallback['message'] = 'OK (via Gmail/Webriau — fallback dari Resend)';
+
+                    return $fallback;
+                }
+
+                log_message('error', 'MailGateway: Resend dan Gmail/Webriau sama-sama gagal.');
+            }
+
+            return $this->result(
+                false,
+                'Gagal mengirim email melalui ' . $provider . ' maupun Gmail/Webriau.',
+                $provider
+            );
         }
 
         // Mode lama (gateway nonaktif): Gmail/Webriau dulu, fallback Resend
@@ -172,11 +197,24 @@ class MailService
 
             return $this->result(true, 'OK (via Resend)', self::PROVIDER_RESEND, is_string($id) ? $id : null);
         } catch (\Resend\Exceptions\ErrorException $e) {
-            // Error dari API Resend (mis. 401/403 domain belum diverifikasi/422).
-            $snippet = $this->safeExceptionMessage($e->getMessage());
-            log_message('error', 'MailGateway: Resend API error: {msg}', ['msg' => $snippet]);
+            // Error dari API Resend (mis. 429 kuota/rate limit, 401/403 auth
+            // atau domain belum diverifikasi, 422 parameter). Kode & tipe
+            // dicatat untuk diagnosis; isi email tidak pernah dicatat.
+            $status = $e->getErrorCode();
+            $type   = $e->getErrorType();
+            log_message('error', 'MailGateway: Resend API error {status} ({type})', [
+                'status' => (string) $status,
+                'type'   => $type,
+            ]);
 
-            return $this->result(false, 'Resend menolak permintaan pengiriman email (' . $snippet . ').', self::PROVIDER_RESEND);
+            $message = match (true) {
+                $status === 429 => 'Kuota/limit pengiriman email Resend tercapai.',
+                in_array($status, [401, 403], true) => 'Autentikasi atau domain pengirim Resend ditolak.',
+                $status === 422 => 'Parameter email ditolak layanan Resend.',
+                default => 'Resend menolak permintaan pengiriman email (' . $this->safeExceptionMessage($e->getMessage()) . ').',
+            };
+
+            return $this->result(false, $message, self::PROVIDER_RESEND);
         } catch (\GuzzleHttp\Exception\ConnectException $e) {
             log_message('error', 'MailGateway: Resend koneksi gagal.');
 
