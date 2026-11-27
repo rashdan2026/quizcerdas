@@ -56,6 +56,9 @@ system/ThirdParty/*/CHANGELOG*.md
 
 # Composer
 vendor/
+# Pengecualian: aset vendor FRONTEND (Quill, Highlight.js) harus ikut di-deploy
+!public/assets/vendor/
+!public/assets/vendor/**
 
 # Writable folder contents
 writable/logs/*
